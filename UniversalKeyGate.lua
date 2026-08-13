@@ -476,12 +476,6 @@ local TabDashboard, TabSettings, TabPerf, TabInfo
 -- ══════════════════════════════════════════════════════════════
 TabDashboard = Window:AddTab("Dashboard")
 
--- Forward-declared: ShowAuthenticatedState (built below, as part of the
--- Authorization Overview) updates the "RESOLVED GAME" stat card, which
--- isn't built until after it -- same forward-reference closure hazard as
--- the Perf/Info tab links above, same fix.
-local dashGameValue
-
 -- ── Authorization Overview: one full-width compact row, two mutually
 -- exclusive states (icon + status text on the left, the state-specific
 -- controls anchored to the right edge via Scale so they stay flush
@@ -529,23 +523,28 @@ do
     local p = Instance.new("UIPadding"); p.PaddingLeft = UDim.new(0,10); p.PaddingRight = UDim.new(0,10); p.Parent = KeyInputBox
 end
 
+-- The one true primary action in this view -- deliberately NOT the same
+-- passive glass treatment as every card/panel around it (that uniform
+-- translucency-on-everything is a known generic-AI-design tell). Solid,
+-- dark-tinted fill + plain high-contrast text reads as a committed button
+-- instead of another floating glass tile.
 local ValidateBtnFrame = Instance.new("TextButton")
 ValidateBtnFrame.Size = UDim2.fromOffset(122, 34)
 ValidateBtnFrame.Position = UDim2.new(1, -136, 0, 21)
-ValidateBtnFrame.BackgroundColor3 = COLOR_DASH
-ValidateBtnFrame.BackgroundTransparency = 0.5
+ValidateBtnFrame.BackgroundColor3 = DarkTint(COLOR_DASH, 0.45)
+ValidateBtnFrame.BackgroundTransparency = 0.12
 ValidateBtnFrame.BorderSizePixel = 0
 ValidateBtnFrame.AutoButtonColor = false
 ValidateBtnFrame.Font = Enum.Font.GothamBold
 ValidateBtnFrame.TextSize = 11
-ValidateBtnFrame.TextColor3 = COLOR_DASH
+ValidateBtnFrame.TextColor3 = T.TextPrimary
 ValidateBtnFrame.Text = "VALIDATE"
 ValidateBtnFrame.TextStrokeColor3 = TEXT_STROKE_COLOR
 ValidateBtnFrame.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
 ValidateBtnFrame.Parent = EntryView
 do
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = ValidateBtnFrame
-    local s = Instance.new("UIStroke"); s.Color = COLOR_DASH; s.Transparency = 0.5; s.Thickness = 1; s.Parent = ValidateBtnFrame
+    local s = Instance.new("UIStroke"); s.Color = COLOR_DASH; s.Transparency = 0.35; s.Thickness = 1; s.Parent = ValidateBtnFrame
 end
 
 local AuthedView = Panel(licenseWrap, UDim2.new(1, 0, 1, 0))
@@ -618,12 +617,11 @@ local function ShowAuthenticatedState(resolvedScript, expiresAt)
     EntryView.Visible = false
     AuthedView.Visible = true
     StartTimer(expiresAt)
-    dashGameValue.Text = resolvedScript or tostring(PlaceId)
 end
 
--- ── Stats row: FPS / Resolved Game / Performance as three equal columns
--- via a real UIListLayout (Scale-sized children), not manually computed
--- pixel offsets -- so the row always divides evenly regardless of width.
+-- ── Stats row: FPS / Ping / Memory as three equal columns via a real
+-- UIListLayout (Scale-sized children), not manually computed pixel
+-- offsets -- so the row always divides evenly regardless of width.
 local dashStatsRow = Instance.new("Frame")
 dashStatsRow.Size = UDim2.new(1, 0, 0, 74)
 dashStatsRow.BackgroundTransparency = 1
@@ -637,25 +635,33 @@ do
     layout.Parent = dashStatsRow
 end
 
+-- Three real, already-computed metrics -- same color per metric as the
+-- Performance tab's own rows (orange/blue/purple), not arbitrary or
+-- decorative. Values are filled in by the Performance tab's task.spawn
+-- loop below (dashFpsValue/dashPingValue/dashMemValue), the same pattern
+-- already used for FPS.
 local dashFpsCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashFpsCard, COLOR_PERF, "F", 32, UDim2.fromOffset(12, 14))
 Label(dashFpsCard, "FPS RATE", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
 local dashFpsValue = Label(dashFpsCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
-local dashGameCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabInfo) end })
-AddIconSquare(dashGameCard, COLOR_DASH, "G", 32, UDim2.fromOffset(12, 14))
-Label(dashGameCard, "RESOLVED GAME", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
-dashGameValue = Label(dashGameCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
+local dashPingCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
+AddIconSquare(dashPingCard, COLOR_DASH, "N", 32, UDim2.fromOffset(12, 14))
+Label(dashPingCard, "ENGINE LATENCY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+local dashPingValue = Label(dashPingCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
-local dashPerfCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
-AddIconSquare(dashPerfCard, COLOR_PERF, "P", 32, UDim2.fromOffset(12, 14))
-Label(dashPerfCard, "PERFORMANCE", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
-local dashPerfValue = Label(dashPerfCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
+local dashMemCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
+AddIconSquare(dashMemCard, COLOR_SET, "M", 32, UDim2.fromOffset(12, 14))
+Label(dashMemCard, "ALLOCATED MEMORY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+local dashMemValue = Label(dashMemCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
 local dashOverview = Panel(TabDashboard.Scroll, UDim2.new(1, 0, 0, 100))
 Label(dashOverview, "Quick Overview", 12, T.TextSecondary, UDim2.fromOffset(14, 12), UDim2.new(1, -28, 0, 16), Enum.Font.GothamBold)
-Label(dashOverview, "Your key and session status are above. Live performance and the full game library are in the sidebar.",
-    10, T.TextMuted, UDim2.fromOffset(14, 32), UDim2.new(1, -28, 0, 34))
+-- Live library count -- set by RefreshInfo (Info tab, built later) off the
+-- same GET /api/places/list result the Info tab itself lists, not a
+-- second guess at the number.
+local dashLibraryCountLbl = Label(dashOverview, "Loading library…", 10, COLOR_INFO, UDim2.fromOffset(14, 32), UDim2.new(1, -28, 0, 14), Enum.Font.GothamBold)
+Label(dashOverview, "Live performance stats are on the Performance tab.", 10, T.TextMuted, UDim2.fromOffset(14, 48), UDim2.new(1, -28, 0, 14))
 local dashInfoLink = Instance.new("TextButton")
 dashInfoLink.Size = UDim2.fromOffset(110, 16)
 dashInfoLink.Position = UDim2.fromOffset(14, 74)
@@ -707,10 +713,11 @@ task.spawn(function()
 
             local pingMs = LocalPlayer:GetNetworkPing() * 1000
             pingValueLbl.Text = string.format("%d ms", math.floor(pingMs + 0.5))
-            dashPerfValue.Text = string.format("%d ms", math.floor(pingMs + 0.5))
+            dashPingValue.Text = string.format("%d ms", math.floor(pingMs + 0.5))
 
             local memMb = StatsSvc:GetTotalMemoryUsageMb()
             memValueLbl.Text = string.format("%.1f MB", memMb)
+            dashMemValue.Text = string.format("%.1f MB", memMb)
         end)
         if not statOk then break end
         task.wait(1)
@@ -791,15 +798,19 @@ local function RefreshInfo()
     if not places then
         InfoStatusLabel.Text = "Couldn't reach the server: " .. tostring(truncatedOrReason)
         InfoStatusLabel.TextColor3 = COLOR_BAD
+        dashLibraryCountLbl.Text = "Library unavailable right now."
         return
     end
 
     if #places == 0 then
         InfoStatusLabel.Text = "No games currently supported yet."
+        dashLibraryCountLbl.Text = "No games in the library yet."
         return
     end
 
-    InfoStatusLabel.Text = tostring(#places) .. " game" .. (#places == 1 and "" or "s") .. " currently supported:"
+    local countPhrase = tostring(#places) .. " game" .. (#places == 1 and "" or "s")
+    InfoStatusLabel.Text = countPhrase .. " currently supported:"
+    dashLibraryCountLbl.Text = countPhrase .. " supported in the library."
     for _, place in ipairs(places) do
         AddInfoRow(place)
     end
@@ -997,7 +1008,7 @@ local function SubmitKey()
         AxiUI:Notify("Access", "Key accepted.", 2)
         OnAuthenticated(key, resolvedScript, expiresAt, false)
     else
-        ValidateBtnFrame.Text = "VALIDATE LICENSE"
+        ValidateBtnFrame.Text = "VALIDATE"
         StatusLabel.Text = reason or "Invalid key — try again."
         StatusLabel.TextColor3 = COLOR_BAD
         Shake(Window.Frame)
