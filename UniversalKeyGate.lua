@@ -117,10 +117,16 @@ local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.l
 -- back down to the mockup's raw, uncapped CSS opacity values (0.05/0.05/
 -- 0.08 = 92-95% see-through) while porting the Superdesign draft, undoing
 -- an already-fixed "everything unreadable" correction from before that.
+-- GroupboxBg/ElementBg (used by AxiUI's own native Groupbox/Element
+-- rendering, e.g. the Settings tab's ThemeManager UI) are a DARK tint, not
+-- white -- same reasoning as PANEL_TINT below: white fill under white text
+-- washes out, dark fill doesn't. Border stays white/light on purpose --
+-- that's the correct "light border" half of the look, only the FILL was
+-- the wrong tone.
 AxiUI:SetTheme({
-    GroupboxBg      = Color3.fromRGB(255, 255, 255),  GroupboxBgAlpha = 0.45,
-    ElementBg       = Color3.fromRGB(255, 255, 255),  ElementBgAlpha  = 0.42,
-    Border          = Color3.fromRGB(255, 255, 255),  BorderAlpha     = 0.40,
+    GroupboxBg      = Color3.fromRGB(26, 29, 39),      GroupboxBgAlpha = 0.60,
+    ElementBg       = Color3.fromRGB(26, 29, 39),      ElementBgAlpha  = 0.60,
+    Border          = Color3.fromRGB(255, 255, 255),   BorderAlpha     = 0.40,
 })
 
 -- Near-black glass, matching the approved design's dark gradient window
@@ -149,6 +155,29 @@ local COLOR_SET   = Color3.fromRGB(192, 132, 252)  -- purple-400
 local COLOR_PERF  = Color3.fromRGB(251, 146, 60)   -- orange-400
 local COLOR_INFO  = Color3.fromRGB(34,  211, 238)  -- cyan-400
 local COLOR_BAD   = Color3.fromRGB(220, 120, 108)
+
+-- Panel fill tint. Researched glassmorphism guidance is explicit that the
+-- glass tint has to match the text tone: light text (our theme) needs a
+-- DARK glass tint, not a white one -- a white fill at any opacity high
+-- enough to be legible with no real blur behind it (Roblox has none, see
+-- SetBlur's own comment) just washes out into a milky haze, which is
+-- exactly what pure-white panel fills at raised opacity were doing here.
+-- Dark base, slightly lighter than the window itself so panels still read
+-- as a distinct raised surface.
+local PANEL_TINT = Color3.fromRGB(26, 29, 39)
+
+-- Blends PANEL_TINT toward an accent color by `amount` -- a subtly colored
+-- DARK glass (the "colored tint" variant the research calls out) rather
+-- than a plain neutral dark panel, for tinted cards like the License
+-- status card.
+local function DarkTint(color, amount)
+    amount = amount or 0.18
+    return Color3.new(
+        PANEL_TINT.R + (color.R - PANEL_TINT.R) * amount,
+        PANEL_TINT.G + (color.G - PANEL_TINT.G) * amount,
+        PANEL_TINT.B + (color.B - PANEL_TINT.B) * amount
+    )
+end
 
 -- ══════════════════════════════════════════════════════════════
 --  WINDOW
@@ -229,8 +258,8 @@ local AvatarImg = Instance.new("ImageLabel")
 AvatarImg.Name                  = "Avatar"
 AvatarImg.Size                  = UDim2.fromOffset(AVATAR_SIZE, AVATAR_SIZE)
 AvatarImg.Position              = UDim2.fromOffset(16, (HEADER_H - AVATAR_SIZE) / 2)
-AvatarImg.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
-AvatarImg.BackgroundTransparency = 0.55
+AvatarImg.BackgroundColor3      = PANEL_TINT
+AvatarImg.BackgroundTransparency = 0.40
 AvatarImg.BorderSizePixel       = 0
 AvatarImg.Image                 = ""
 AvatarImg.ScaleType             = Enum.ScaleType.Crop
@@ -287,8 +316,8 @@ local function Panel(parent, size, position)
     local p = Instance.new("Frame")
     p.Size                   = size
     p.Position               = position or UDim2.fromOffset(0, 0)
-    p.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
-    p.BackgroundTransparency = 0.55
+    p.BackgroundColor3       = PANEL_TINT
+    p.BackgroundTransparency = 0.40
     p.BorderSizePixel        = 0
     p.Parent                 = parent
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = p
@@ -304,8 +333,8 @@ local function StatCard(parent, opts)
     if opts.Href then card.Text = "" ; card.AutoButtonColor = false end
     card.Size                   = opts.Size
     card.Position               = opts.Position or UDim2.fromOffset(0, 0)
-    card.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
-    card.BackgroundTransparency = opts.Tint and 0.50 or 0.55
+    card.BackgroundColor3       = opts.Tint and DarkTint(opts.Tint) or PANEL_TINT
+    card.BackgroundTransparency = 0.40
     card.BorderSizePixel        = 0
     card.Parent                 = parent
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = card
@@ -315,10 +344,10 @@ local function StatCard(parent, opts)
 
     if opts.Href then
         card.MouseEnter:Connect(function()
-            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = (opts.Tint and 0.40 or 0.45) }):Play()
+            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.28 }):Play()
         end)
         card.MouseLeave:Connect(function()
-            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = opts.Tint and 0.50 or 0.55 }):Play()
+            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.40 }):Play()
         end)
         card.MouseButton1Click:Connect(opts.Href)
     end
@@ -371,8 +400,8 @@ local Toast = Instance.new("TextLabel")
 Toast.Size                   = UDim2.fromOffset(180, 34)
 Toast.AnchorPoint             = Vector2.new(0.5, 1)
 Toast.Position                = UDim2.new(0.5, 0, 1, 40)
-Toast.BackgroundColor3        = Color3.fromRGB(255, 255, 255)
-Toast.BackgroundTransparency  = 0.5
+Toast.BackgroundColor3        = PANEL_TINT
+Toast.BackgroundTransparency  = 0.35
 Toast.BorderSizePixel         = 0
 Toast.Font                    = Enum.Font.GothamBold
 Toast.TextSize                = 12
@@ -529,8 +558,8 @@ local StatusLabel = Label(EntryView, "Press Validate to check the library.", 9, 
 local KeyInputBox = Instance.new("TextBox")
 KeyInputBox.Size = UDim2.new(1, -32, 0, 34)
 KeyInputBox.Position = UDim2.fromOffset(16, 142)
-KeyInputBox.BackgroundColor3 = Color3.fromRGB(255,255,255)
-KeyInputBox.BackgroundTransparency = 0.5
+KeyInputBox.BackgroundColor3 = PANEL_TINT
+KeyInputBox.BackgroundTransparency = 0.35
 KeyInputBox.BorderSizePixel = 0
 KeyInputBox.Font = Enum.Font.GothamMedium
 KeyInputBox.TextSize = 11
@@ -701,8 +730,8 @@ local function AddInfoRow(place)
     local label = place.displayName or ("PlaceId " .. tostring(place.placeId))
     local row = Instance.new("TextButton")
     row.Size = UDim2.new(1, 0, 0, 48)
-    row.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    row.BackgroundTransparency = 0.55
+    row.BackgroundColor3 = PANEL_TINT
+    row.BackgroundTransparency = 0.40
     row.BorderSizePixel = 0
     row.Text = ""
     row.AutoButtonColor = false
@@ -730,10 +759,10 @@ local function AddInfoRow(place)
     local copyLbl = Label(row, "Copy ID", 9, T.TextMuted, UDim2.new(1, -34, 0, 17), UDim2.fromOffset(30, 14), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
 
     row.MouseEnter:Connect(function()
-        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.45 }):Play()
+        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.28 }):Play()
     end)
     row.MouseLeave:Connect(function()
-        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.55 }):Play()
+        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.40 }):Play()
     end)
     row.MouseButton1Click:Connect(function()
         pcall(setclipboard, tostring(place.placeId))
