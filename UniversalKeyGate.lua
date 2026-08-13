@@ -1,5 +1,5 @@
 --[[
-    Universal Key Gate — Glassmorphism edition
+    Universal Key Gate — Dashboard edition
 
     THE loader every script (Finite included) should load from — not a
     per-script loader. Enter a key, and the finite-log-proxy Worker (1)
@@ -9,8 +9,25 @@
     code at all — that mapping lives entirely server-side.
 
     All Worker communication is delegated to the shared keyauth.lua module
-    — this file only builds the AxiUI window around it. No local HTTP
-    bridge, no local JSON handling, no local validity decision.
+    — this file only builds the UI around it. No local HTTP bridge, no
+    local JSON handling, no local validity decision.
+
+    AxiUI is now a FORK (axiui-keygate/AxiUI/, not ScriptB/Universal-Scripts)
+    edited directly rather than worked around from outside. The previous
+    approach hid the built-in macOS dots and hand-built a parallel sidebar
+    system from outside the library, fighting its internals at every step
+    -- fragile, and the actual root cause of the "shadow permanently
+    visible" bug (a shadow built externally as a one-time position snapshot
+    has no way to track the real window moving/hiding). This fork instead:
+      - removes the macOS dots at the source (gone, not hidden)
+      - makes a native left sidebar the framework's actual tab layout, with
+        icon-badge tabs built in (see AxiUI_Framework.lua's AddTab/_SelectTab)
+      - adds AxiUI:AddShadow(target), a shadow wired to the target's own
+        Position/Size/Visible via GetPropertyChangedSignal so it can never
+        desync from what it's shadowing
+      - adds CreateWindow's HeaderHeight/SidebarWidth options so a custom
+        header reserves its space natively instead of being repositioned
+        into existence after the fact
 
     Lifecycle: on a valid key (fresh entry OR a still-valid cached one from
     a previous run in THIS game), the License tab switches from the key
@@ -22,23 +39,31 @@
     with a valid cached key from elsewhere (see TrySilentLoad).
 
     Visual style: glassmorphism (translucent layered panels, soft gradient
-    sheen, light border) via BackgroundTransparency + UIGradient + UIStroke
-    — Roblox has no native per-panel background blur (BlurEffect only
-    blurs the whole 3D viewport behind ALL UI), so "frosted glass" here
-    means the same layered-transparency technique every Roblox UI library
-    uses for this look, not literal optical blur.
+    sheen, light border, real drop shadows) plus a genuine background blur
+    (DepthOfFieldEffect, confirmed against Roblox's own docs -- see SetBlur)
+    while the window itself is open, matching how Fluent's own "Acrylic"
+    effect actually works. Panel opacity is calibrated well above a typical
+    CSS glassmorphism example (there's no real blur *behind a single panel*
+    the way CSS relies on, so low-opacity panels just read as invisible in
+    Roblox rather than "glassy").
 
-    Reference: only AxiUI/ from ScriptB/Universal-Scripts was read for
-    component/styling reference, per instruction — no other part of that
-    repo was browsed.
+    Content is organized as an actual dashboard (Dashboard/License/Settings/
+    Performance/Info in a left sidebar), not a single settings-style list --
+    Dashboard is a real landing page with status cards, not another tab of
+    stacked rows.
 
-    See Documentation/KV-Script-Hosting-Plan.md for the full architecture.
+    Entire construction is wrapped in pcall so a future bug fails loud (a
+    warn() and nothing built) instead of silently killing the whole script
+    partway through with no UI and no explanation, which is what "UI not
+    loading" looks like from a real user's side when nothing is defensive.
 
     Load:
         loadstring(game:HttpGet(
             "https://raw.githubusercontent.com/ScriptB/axiui-keygate/main/UniversalKeyGate.lua"
         ))()
 ]]
+
+local ok, err = pcall(function()
 
 local Players     = game:GetService("Players")
 local TweenSvc     = game:GetService("TweenService")
@@ -52,17 +77,15 @@ local LocalPlayer = Players.LocalPlayer
 -- (in studs from camera), InFocusRadius is the buffer around it that stays
 -- sharp, NearIntensity/FarIntensity control blur strength on either side.
 -- A small FocusDistance + tight InFocusRadius + FarIntensity up and
--- NearIntensity at 0 blurs the game world beyond that near point while
--- nothing meaningful sits close enough to the camera to trigger near-blur.
--- Toggled on only while the actual window is open (not just the floating
--- orb) -- minimized-to-orb shouldn't blur the game the player is trying to
--- get back to.
+-- NearIntensity at 0 blurs the game world beyond that near point. Toggled
+-- on only while the actual window is open -- minimized-to-orb shouldn't
+-- blur the game the player is trying to get back to.
 local BlurEffect = Instance.new("DepthOfFieldEffect")
 BlurEffect.Name          = "UniversalKeyGate_Blur"
 BlurEffect.FocusDistance = 2
 BlurEffect.InFocusRadius = 1
 BlurEffect.NearIntensity = 0
-BlurEffect.FarIntensity  = 0.6
+BlurEffect.FarIntensity  = 0
 BlurEffect.Enabled       = false
 BlurEffect.Parent        = Lighting
 
@@ -97,53 +120,43 @@ then
 end
 
 local PlaceId = game.PlaceId
-
--- Namespaced per-PlaceId (not global) so returning to an already-validated
--- game skips this UI entirely, but a new game still prompts once.
 local CACHE_FILE = "universalkeygate_place_" .. tostring(PlaceId) .. ".json"
 
 local function RunPayload(source)
-    local runOk, err = pcall(function()
+    local runOk, runErr = pcall(function()
         loadstring(source)()
     end)
     if not runOk then
-        warn("[UniversalKeyGate] Script exec failed: " .. tostring(err))
+        warn("[UniversalKeyGate] Script exec failed: " .. tostring(runErr))
     end
 end
 
 -- ══════════════════════════════════════════════════════════════
---  LOAD AXIUI + THEME
+--  LOAD AXIUI (fork) + THEME
 -- ══════════════════════════════════════════════════════════════
-local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/Universal-Scripts/main/AxiUI/"
+local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/axiui-keygate/main/AxiUI/"
 
 local AxiUI = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_Framework.lua"))()
 local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.lua"))()
 
--- Structural glass properties -- NOT part of ThemeManager's swappable key
--- set (it only swaps WindowBg/Accent/AccentStrong/Text*), these are the
--- fixed "this is a glass panel" look: translucent, not invisible, plus a
--- light border. Roblox has no real background blur to lean on the way CSS
--- glassmorphism does, so panels need noticeably MORE opacity than a typical
--- blur-backed glass example to actually stay legible -- the first pass here
--- used ~5% opacity (GroupboxBgAlpha/ElementBgAlpha), which read as "can
--- barely see it" exactly because there's no blurred backdrop to give it any
--- visual structure at that level. Raised substantially.
+-- Structural glass properties. Raised substantially from an earlier pass
+-- (~5% GroupboxBgAlpha/ElementBgAlpha, ~70-80% WindowBgAlpha) that read as
+-- "everything unreadable" -- there's no real blur *behind an individual
+-- panel* the way CSS glassmorphism examples rely on, so low opacity just
+-- looks like nothing is there. This pass prioritizes actual legibility.
 AxiUI:SetTheme({
-    GroupboxBg      = Color3.fromRGB(255, 255, 255),  GroupboxBgAlpha = 0.35,
-    ElementBg       = Color3.fromRGB(255, 255, 255),  ElementBgAlpha  = 0.26,
-    Border          = Color3.fromRGB(255, 255, 255),  BorderAlpha     = 0.22,
+    GroupboxBg      = Color3.fromRGB(255, 255, 255),  GroupboxBgAlpha = 0.55,
+    ElementBg       = Color3.fromRGB(255, 255, 255),  ElementBgAlpha  = 0.42,
+    Border          = Color3.fromRGB(255, 255, 255),  BorderAlpha     = 0.30,
 })
 
--- Registered as a selectable theme (not just AxiUI:SetTheme'd directly) so
--- it shows up in the Settings tab's theme dropdown alongside the built-ins,
--- and switching away from it and back still works correctly.
 ThemeManager:AddTheme("Glass", {
-    WindowBg      = Color3.fromRGB(20,  24,  32),   WindowBgAlpha  = 0.80,
-    Accent        = Color3.fromRGB(150, 178, 205),  AccentAlpha    = 0.32,
-    AccentStrong  = Color3.fromRGB(200, 220, 238),
-    TextPrimary   = Color3.fromRGB(240, 244, 248),
-    TextSecondary = Color3.fromRGB(172, 183, 197),
-    TextMuted     = Color3.fromRGB(112, 122, 138),
+    WindowBg      = Color3.fromRGB(18,  21,  28),   WindowBgAlpha  = 0.93,
+    Accent        = Color3.fromRGB(150, 178, 205),  AccentAlpha    = 0.38,
+    AccentStrong  = Color3.fromRGB(205, 222, 238),
+    TextPrimary   = Color3.fromRGB(244, 247, 250),
+    TextSecondary = Color3.fromRGB(188, 197, 209),
+    TextMuted     = Color3.fromRGB(138, 148, 163),
 })
 ThemeManager:Apply("Glass")
 
@@ -152,73 +165,35 @@ local T = AxiUI.Theme
 -- ══════════════════════════════════════════════════════════════
 --  WINDOW
 -- ══════════════════════════════════════════════════════════════
-local SIDEBAR_W    = 100  -- left tab rail, replacing AxiUI's default horizontal top tab row
-local CONTENT_W    = 460  -- desired width for the actual tab content, unrelated to the sidebar
-local WIDTH         = CONTENT_W + SIDEBAR_W
-local BASE_HEIGHT  = 520  -- content height AxiUI lays out under its own title(34)+tabrow(30) formula
-local HEADER_H      = 64  -- extra row inserted below the title bar for greeting + avatar
+local SIDEBAR_W  = 110
+local CONTENT_W  = 460
+local HEADER_H   = 64
+local WIDTH      = CONTENT_W + SIDEBAR_W
+local HEIGHT     = 560
 
 local Window = AxiUI:CreateWindow({
-    Title  = "Access",
-    Width  = WIDTH,
-    Height = BASE_HEIGHT,
+    Title        = "Access",
+    Width        = WIDTH,
+    Height       = HEIGHT,
+    HeaderHeight = HEADER_H,
+    SidebarWidth = SIDEBAR_W,
 })
-
--- Grow the frame to make room for the custom header WITHOUT shrinking the
--- content area AxiUI already laid out -- then recenter using the same
--- formula CreateWindow used, since the size just changed out from under it.
+Window.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
 do
     local vp = workspace.CurrentCamera.ViewportSize
-    local newHeight = BASE_HEIGHT + HEADER_H
-    Window.Frame.Size = UDim2.fromOffset(WIDTH, newHeight)
-    Window.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
-    Window.Frame.Position    = UDim2.fromOffset(math.floor(vp.X / 2), math.floor(vp.Y / 2))
+    Window.Frame.Position = UDim2.fromOffset(math.floor(vp.X / 2), math.floor(vp.Y / 2))
 end
 
--- Soft drop shadow -- every well-regarded Roblox UI library (Fluent's
--- acrylic panels, Rayfield's window/toggles/sliders/notifications) has an
--- explicit shadow layer under its panels; a flat translucent panel with
--- zero shadow is a big part of why the first pass read as flat/lack-luster.
--- Built from stacked, progressively larger/fainter Frames rather than an
--- external image asset (Rayfield uses a pre-baked shadow PNG uploaded to
--- its own account -- reusing someone else's specific asset id isn't
--- something to do casually, and this primitive-only approach gets a
--- comparable soft-glow result without that dependency). A shadow can't
--- render behind its own parent in Roblox (children always draw in front of
--- their parent regardless of ZIndex), so these are siblings of Frame under
--- Gui with a lower ZIndex, sized to the window's resting size -- they don't
--- track the brief 0.4-0.5s open/close size tween in real time, which is
--- not visually meaningful for a soft, indistinct shadow.
-do
-    local shadowLayers = {
-        { pad = 5,  alpha = 0.16 },
-        { pad = 11, alpha = 0.10 },
-        { pad = 19, alpha = 0.06 },
-        { pad = 30, alpha = 0.03 },
-    }
-    for i, layer in ipairs(shadowLayers) do
-        local s = Instance.new("Frame")
-        s.Name                   = "Shadow" .. i
-        s.AnchorPoint             = Vector2.new(0.5, 0.5)
-        s.Position                = Window.Frame.Position + UDim2.fromOffset(0, layer.pad * 0.4)
-        s.Size                   = UDim2.fromOffset(WIDTH + layer.pad * 2, (BASE_HEIGHT + HEADER_H) + layer.pad * 2)
-        s.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
-        s.BackgroundTransparency = 1 - layer.alpha
-        s.BorderSizePixel        = 0
-        s.ZIndex                 = Window.Frame.ZIndex - 1
-        s.Parent                 = Window.Gui
-        local c = Instance.new("UICorner")
-        c.CornerRadius = UDim.new(0, 12 + layer.pad * 0.6)
-        c.Parent = s
-    end
-end
+-- Real drop shadow, self-tracking (see AxiUI_Framework.lua's AddShadow) --
+-- this is the actual fix for "shadow permanently visible no matter UI
+-- location or state": it's wired to Window.Frame's own Position/Size/
+-- Visible, not a one-time snapshot.
+Window:AddShadow(Window.Frame)
 
--- Subtle diagonal glass sheen -- a soft light streak across the panel,
--- heavily transparent. This plus the layered BackgroundTransparency +
--- UIStroke border is the actual "frosted glass" look; there is no true
--- background blur to add on top of it (see file header) -- now paired with
--- a real one via DepthOfFieldEffect (SetBlur above), toggled while the
--- window is actually open.
+-- Subtle diagonal glass sheen -- a soft light streak across the panel.
+-- Paired with the real DepthOfFieldEffect blur above (SetBlur) while the
+-- window is open, plus the drop shadow, for actual layered depth rather
+-- than one flat translucent rectangle.
 do
     local sheen = Instance.new("UIGradient")
     sheen.Color = ColorSequence.new({
@@ -227,175 +202,17 @@ do
         ColorSequenceKeypoint.new(1,   Color3.fromRGB(190, 205, 220)),
     })
     sheen.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0,   0.93),
-        NumberSequenceKeypoint.new(0.5, 0.985),
-        NumberSequenceKeypoint.new(1,   0.93),
+        NumberSequenceKeypoint.new(0,   0.90),
+        NumberSequenceKeypoint.new(0.5, 0.97),
+        NumberSequenceKeypoint.new(1,   0.90),
     })
     sheen.Rotation = 105
     sheen.Parent = Window.Frame
 end
 
--- Suppress the macOS-style traffic-light dots the default title bar always
--- adds (no exposed option to disable them at CreateWindow) -- explicitly
--- not the aesthetic asked for. A first attempt matched on "the Frame with
--- exactly 3 children" and silently never fired: AddList() (used to lay the
--- 3 dots out horizontally) parents a UIListLayout into that same container,
--- so it actually has 4 children, not 3 -- the heuristic never matched
--- anything. Matching on the dot row's own hardcoded Size/Position instead
--- (read directly from AxiUI's source) is exact, not a child-count guess.
-for _, child in ipairs(Window.TitleBar:GetChildren()) do
-    if child:IsA("Frame")
-        and child.Size == UDim2.fromOffset(46, 10)
-        and child.Position == UDim2.fromOffset(10, 12)
-    then
-        child.Visible = false
-    end
-end
-
--- AxiUI's built-in tab row is a horizontal strip across the top -- hidden
--- entirely in favor of a custom LEFT sidebar built below. Its individual
--- tab buttons/underlines still exist and still work (Window:AddTab still
--- creates them), they're just never shown; the sidebar drives the exact
--- same Window:_SelectTab(tab) switching logic instead of relying on those
--- hidden buttons' own click handlers.
-Window.TabRow.Visible = false
-local tabRowDivider = Window.Frame:FindFirstChild("TabRowDivider")
-if tabRowDivider then tabRowDivider.Visible = false end
-
--- Content area now sits to the RIGHT of the sidebar, below the header --
--- no tab-row height to reserve any more since tabs aren't below the header,
--- they're beside the content.
-Window.ContentArea.Position = UDim2.fromOffset(SIDEBAR_W, 34 + HEADER_H)
-Window.ContentArea.Size     = UDim2.new(1, -SIDEBAR_W, 1, -(34 + HEADER_H))
-
 -- ══════════════════════════════════════════════════════════════
---  LEFT SIDEBAR — custom vertical tab rail. AxiUI's own tab row is a fixed
---  horizontal FillDirection baked in at creation, not something that can
---  just be resized into a vertical layout -- so this is a genuinely
---  separate, independent nav strip that drives AxiUI's existing tab-switch
---  state (Window.ActiveTab / Window:_SelectTab) rather than replacing it.
--- ══════════════════════════════════════════════════════════════
-local Sidebar = Instance.new("Frame")
-Sidebar.Name                   = "Sidebar"
-Sidebar.Size                   = UDim2.new(0, SIDEBAR_W, 1, -(34 + HEADER_H))
-Sidebar.Position               = UDim2.fromOffset(0, 34 + HEADER_H)
-Sidebar.BackgroundColor3       = T.GroupboxBg
-Sidebar.BackgroundTransparency = 1 - T.GroupboxBgAlpha
-Sidebar.BorderSizePixel        = 0
-Sidebar.Parent                 = Window.Frame
-
-local sidebarDiv = Instance.new("Frame")
-sidebarDiv.Size                   = UDim2.new(0, 1, 1, 0)
-sidebarDiv.Position               = UDim2.new(1, -1, 0, 0)
-sidebarDiv.BackgroundColor3       = T.Border
-sidebarDiv.BackgroundTransparency = 1 - T.BorderAlpha
-sidebarDiv.BorderSizePixel        = 0
-sidebarDiv.Parent                 = Sidebar
-
-local sidebarList = Instance.new("UIListLayout")
-sidebarList.Padding   = UDim.new(0, 4)
-sidebarList.SortOrder = Enum.SortOrder.LayoutOrder
-sidebarList.Parent    = Sidebar
-
-local sidebarPad = Instance.new("UIPadding")
-sidebarPad.PaddingTop    = UDim.new(0, 10)
-sidebarPad.PaddingLeft   = UDim.new(0, 8)
-sidebarPad.PaddingRight  = UDim.new(0, 8)
-sidebarPad.Parent        = Sidebar
-
-local sidebarEntries = {}
-
--- Wraps Window:AddTab -- creates the tab (and its hidden top-row button)
--- exactly as before, plus a matching sidebar button that calls the same
--- Window:_SelectTab(tab) the hidden button would have.
--- Letter-badge icon rather than a Unicode/emoji glyph -- Roblox TextLabels
--- don't reliably render full emoji (no color-emoji font support the way a
--- modern OS does; many glyphs just show as a missing-character box), and a
--- plain single letter in a small colored circle is a well-established,
--- guaranteed-to-render alternative used by plenty of real apps, not a
--- placeholder. No icon-library dependency/asset id needed either.
-local function AddSidebarTab(name)
-    local tab = Window:AddTab(name)
-
-    local btn = Instance.new("TextButton")
-    btn.Size                   = UDim2.new(1, 0, 0, 34)
-    btn.BackgroundColor3       = T.ElementBg
-    btn.BackgroundTransparency = 1
-    btn.Text                   = ""
-    btn.AutoButtonColor        = false
-    btn.BorderSizePixel        = 0
-    btn.Parent                 = Sidebar
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = btn
-
-    local badge = Instance.new("Frame")
-    badge.Size                   = UDim2.fromOffset(22, 22)
-    badge.Position               = UDim2.fromOffset(6, 6)
-    badge.BackgroundColor3       = T.Accent
-    badge.BackgroundTransparency = 1 - T.AccentAlpha
-    badge.BorderSizePixel        = 0
-    badge.Parent                 = btn
-    local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(1, 0); bc.Parent = badge
-
-    local badgeLbl = Instance.new("TextLabel")
-    badgeLbl.Size                   = UDim2.new(1, 0, 1, 0)
-    badgeLbl.BackgroundTransparency = 1
-    badgeLbl.Font                   = Enum.Font.GothamBold
-    badgeLbl.TextSize               = 11
-    badgeLbl.TextColor3             = T.TextPrimary
-    badgeLbl.Text                   = name:sub(1, 1):upper()
-    badgeLbl.Parent                 = badge
-
-    local nameLbl = Instance.new("TextLabel")
-    nameLbl.Size                   = UDim2.new(1, -40, 1, 0)
-    nameLbl.Position               = UDim2.fromOffset(36, 0)
-    nameLbl.BackgroundTransparency = 1
-    nameLbl.Font                   = Enum.Font.GothamMedium
-    nameLbl.TextSize               = 12
-    nameLbl.TextColor3             = T.TextMuted
-    nameLbl.TextXAlignment         = Enum.TextXAlignment.Left
-    nameLbl.Text                   = name
-    nameLbl.Parent                 = btn
-
-    local entry = { Tab = tab, Button = btn }
-
-    -- Hover/select feedback stays quick (instant feedback still matters),
-    -- but Exponential instead of the default Quad reads noticeably smoother
-    -- for the same duration -- small but real, same curve as the macro
-    -- transitions below just compressed into a much shorter window.
-    local HOVER_TWEEN = TweenInfo.new(0.15, Enum.EasingStyle.Exponential)
-
-    local function Refresh()
-        local active = Window.ActiveTab == tab
-        TweenSvc:Create(btn, HOVER_TWEEN, {
-            BackgroundTransparency = active and (1 - T.AccentAlpha) or 1,
-        }):Play()
-        TweenSvc:Create(nameLbl, HOVER_TWEEN, {
-            TextColor3 = active and T.TextPrimary or T.TextMuted,
-        }):Play()
-        TweenSvc:Create(badge, HOVER_TWEEN, {
-            BackgroundTransparency = active and (1 - T.AccentAlpha) or (1 - T.AccentAlpha - 0.15),
-        }):Play()
-    end
-    entry.Refresh = Refresh
-
-    btn.MouseButton1Click:Connect(function()
-        Window:_SelectTab(tab)
-        for _, e in ipairs(sidebarEntries) do e.Refresh() end
-    end)
-    btn.MouseEnter:Connect(function()
-        if Window.ActiveTab ~= tab then
-            TweenSvc:Create(btn, HOVER_TWEEN, { BackgroundTransparency = 1 - 0.08 }):Play()
-        end
-    end)
-    btn.MouseLeave:Connect(Refresh)
-
-    table.insert(sidebarEntries, entry)
-    Refresh()
-    return tab
-end
-
--- ══════════════════════════════════════════════════════════════
---  CUSTOM HEADER — avatar + time-of-day greeting
+--  CUSTOM HEADER — avatar + time-of-day greeting, in the space
+--  CreateWindow's HeaderHeight reserved natively.
 -- ══════════════════════════════════════════════════════════════
 local function GetGreeting()
     local hour = DateTime.now():ToLocalTime().Hour
@@ -430,7 +247,7 @@ AvatarImg.Name                  = "Avatar"
 AvatarImg.Size                  = UDim2.fromOffset(AVATAR_SIZE, AVATAR_SIZE)
 AvatarImg.Position              = UDim2.fromOffset(14, (HEADER_H - AVATAR_SIZE) / 2)
 AvatarImg.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
-AvatarImg.BackgroundTransparency = 0.9
+AvatarImg.BackgroundTransparency = 0.85
 AvatarImg.BorderSizePixel       = 0
 AvatarImg.Image                 = ""
 AvatarImg.ScaleType             = Enum.ScaleType.Crop
@@ -446,15 +263,12 @@ do
     s.Parent = AvatarImg
 end
 
--- GetUserThumbnailAsync yields, so this runs on its own thread rather than
--- blocking window construction. content is a rbxthumb:// content id,
--- assignable straight to Image.
 task.spawn(function()
-    local ok, content = pcall(function()
+    local thumbOk, content = pcall(function()
         return Players:GetUserThumbnailAsync(
             LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
     end)
-    if ok and content and content ~= "" then
+    if thumbOk and content and content ~= "" then
         AvatarImg.Image = content
     end
 end)
@@ -477,16 +291,93 @@ SubLbl.Position               = UDim2.fromOffset(14 + AVATAR_SIZE + 12, HEADER_H
 SubLbl.BackgroundTransparency = 1
 SubLbl.Font                   = Enum.Font.Gotham
 SubLbl.TextSize               = 11
-SubLbl.TextColor3             = T.TextMuted
+SubLbl.TextColor3             = T.TextSecondary
 SubLbl.TextXAlignment         = Enum.TextXAlignment.Left
 SubLbl.TextTruncate           = Enum.TextTruncate.AtEnd
 SubLbl.Text                   = "Game ID " .. tostring(PlaceId)
 SubLbl.Parent                 = HeaderRow
 
 -- ══════════════════════════════════════════════════════════════
+--  CARD HELPER — small bordered stat panels, laid out in a row. This is
+--  what actually makes Dashboard/Performance read as a dashboard rather
+--  than a settings-style stacked list.
+-- ══════════════════════════════════════════════════════════════
+local function AddCardRow(groupbox, cardSpecs)
+    local row = Instance.new("Frame")
+    row.Size                   = UDim2.new(1, -16, 0, 62)
+    row.BackgroundTransparency = 1
+    row.BorderSizePixel        = 0
+    row.Parent                 = groupbox.Body
+
+    local list = Instance.new("UIListLayout")
+    list.FillDirection = Enum.FillDirection.Horizontal
+    list.Padding        = UDim.new(0, 8)
+    list.SortOrder       = Enum.SortOrder.LayoutOrder
+    list.Parent          = row
+
+    local cardW = math.floor((CONTENT_W - 16 - 16 - (#cardSpecs - 1) * 8) / #cardSpecs)
+    local cards = {}
+
+    for _, spec in ipairs(cardSpecs) do
+        local card = Instance.new("Frame")
+        card.Size                   = UDim2.fromOffset(cardW, 62)
+        card.BackgroundColor3       = T.ElementBg
+        card.BackgroundTransparency = 1 - T.ElementBgAlpha
+        card.BorderSizePixel        = 0
+        card.Parent                 = row
+        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = card
+        local s = Instance.new("UIStroke")
+        s.Color = T.Border; s.Transparency = 1 - T.BorderAlpha; s.Thickness = 1; s.Parent = card
+
+        local titleLbl = Instance.new("TextLabel")
+        titleLbl.Size                   = UDim2.new(1, -12, 0, 14)
+        titleLbl.Position               = UDim2.fromOffset(8, 6)
+        titleLbl.BackgroundTransparency = 1
+        titleLbl.Font                   = Enum.Font.Gotham
+        titleLbl.TextSize               = 10
+        titleLbl.TextColor3             = T.TextSecondary
+        titleLbl.TextXAlignment         = Enum.TextXAlignment.Left
+        titleLbl.Text                   = spec.Title
+        titleLbl.Parent                 = card
+
+        local valueLbl = Instance.new("TextLabel")
+        valueLbl.Size                   = UDim2.new(1, -12, 0, 28)
+        valueLbl.Position               = UDim2.fromOffset(8, 24)
+        valueLbl.BackgroundTransparency = 1
+        valueLbl.Font                   = Enum.Font.GothamBold
+        valueLbl.TextSize               = 17
+        valueLbl.TextColor3             = T.TextPrimary
+        valueLbl.TextXAlignment         = Enum.TextXAlignment.Left
+        valueLbl.Text                   = spec.Value or "--"
+        valueLbl.Parent                 = card
+
+        cards[spec.Key or spec.Title] = valueLbl
+    end
+
+    return cards
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  DASHBOARD TAB — a real landing page, not another settings list: status
+--  cards giving an at-a-glance summary, matching what an actual dashboard
+--  looks like rather than a box with tabs.
+-- ══════════════════════════════════════════════════════════════
+local TabDashboard = Window:AddTab("Dashboard", { Icon = "D" })
+local BoxOverview = TabDashboard:AddGroupbox("Overview")
+local overviewCards = AddCardRow(BoxOverview, {
+    { Key = "Status", Title = "LICENSE",  Value = "Checking…" },
+    { Key = "Game",   Title = "GAME",     Value = tostring(PlaceId) },
+    { Key = "FPS",    Title = "FPS",      Value = "--" },
+})
+BoxOverview:AddLabel(
+    "Head to the License tab to authenticate, or Info to see every game currently supported.",
+    { Color = T.TextMuted }
+)
+
+-- ══════════════════════════════════════════════════════════════
 --  LICENSE TAB — two states: key entry, or authenticated + live expiry
 -- ══════════════════════════════════════════════════════════════
-local TabLicense = AddSidebarTab("License")
+local TabLicense = Window:AddTab("License", { Icon = "L" })
 
 local EntryBox = TabLicense:AddGroupbox("Authentication")
 local StatusLabel = EntryBox:AddLabel(
@@ -501,12 +392,9 @@ local ValidateBtn = EntryBox:AddButton({ Text = "Validate" })
 
 local AuthedBox = TabLicense:AddGroupbox("Authentication")
 AuthedBox.Container.Visible = false
-local AuthedStatusLabel = AuthedBox:AddLabel("Authenticated", { Color = Color3.fromRGB(126, 190, 150) })
+local AuthedStatusLabel = AuthedBox:AddLabel("Authenticated", { Color = Color3.fromRGB(140, 205, 165) })
 local AuthedTimerLabel  = AuthedBox:AddLabel("", { Color = T.TextSecondary })
 
--- Pasting into a Roblox TextBox commonly drags in invisible characters
--- (trailing newline, stray spaces, zero-width space U+200B) that don't show
--- visually but would otherwise get sent as part of the key.
 local function CleanKey(s)
     s = tostring(s or "")
     s = s:gsub("\226\128\139", "") -- zero-width space (U+200B)
@@ -554,23 +442,26 @@ local function ShowAuthenticatedState(resolvedScript, expiresAt)
         and ("Authenticated — \"" .. resolvedScript .. "\".")
         or "Authenticated."
     StartTimer(expiresAt)
+    overviewCards.Status.Text = "Active"
+    overviewCards.Status.TextColor3 = Color3.fromRGB(140, 205, 165)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SETTINGS TAB — theme management comes almost entirely from AxiUI's own
---  ThemeManager (dropdown, rainbow accent, save/load custom).
+--  SETTINGS TAB
 -- ══════════════════════════════════════════════════════════════
-local TabSettings = AddSidebarTab("Settings")
+local TabSettings = Window:AddTab("Settings", { Icon = "S" })
 ThemeManager:ApplyToTab(TabSettings)
 
 -- ══════════════════════════════════════════════════════════════
---  PERFORMANCE TAB — live FPS / ping / memory
+--  PERFORMANCE TAB — stat cards, not a plain list.
 -- ══════════════════════════════════════════════════════════════
-local TabPerf = AddSidebarTab("Performance")
+local TabPerf = Window:AddTab("Performance", { Icon = "P" })
 local BoxPerf = TabPerf:AddGroupbox("Live Stats")
-local FpsLabel    = BoxPerf:AddLabel("FPS: --",    { Color = T.TextSecondary })
-local PingLabel   = BoxPerf:AddLabel("Ping: --",   { Color = T.TextSecondary })
-local MemoryLabel = BoxPerf:AddLabel("Memory: --", { Color = T.TextSecondary })
+local perfCards = AddCardRow(BoxPerf, {
+    { Key = "FPS",    Title = "FPS",    Value = "--" },
+    { Key = "Ping",   Title = "PING",   Value = "--" },
+    { Key = "Memory", Title = "MEMORY", Value = "--" },
+})
 
 -- FrameTime is Roblox's own per-frame render time in seconds (Stats
 -- service) -- FPS = 1/FrameTime. GetNetworkPing() returns seconds, so *1000
@@ -578,18 +469,20 @@ local MemoryLabel = BoxPerf:AddLabel("Memory: --", { Color = T.TextSecondary })
 -- engine APIs, not hand-rolled measurements.
 task.spawn(function()
     while true do
-        local ok = pcall(function()
+        local statOk = pcall(function()
             local frameTime = StatsSvc.FrameTime
             local fps = frameTime > 0 and (1 / frameTime) or 0
-            FpsLabel.Text = string.format("FPS: %d", math.floor(fps + 0.5))
+            local fpsText = tostring(math.floor(fps + 0.5))
+            perfCards.FPS.Text = fpsText
+            overviewCards.FPS.Text = fpsText
 
             local pingMs = LocalPlayer:GetNetworkPing() * 1000
-            PingLabel.Text = string.format("Ping: %d ms", math.floor(pingMs + 0.5))
+            perfCards.Ping.Text = string.format("%d ms", math.floor(pingMs + 0.5))
 
             local memMb = StatsSvc:GetTotalMemoryUsageMb()
-            MemoryLabel.Text = string.format("Memory: %d MB", math.floor(memMb + 0.5))
+            perfCards.Memory.Text = string.format("%d MB", math.floor(memMb + 0.5))
         end)
-        if not ok then break end
+        if not statOk then break end
         task.wait(1)
     end
 end)
@@ -597,7 +490,7 @@ end)
 -- ══════════════════════════════════════════════════════════════
 --  INFO TAB — live from the Worker, never a hardcoded/phantom list.
 -- ══════════════════════════════════════════════════════════════
-local TabInfo = AddSidebarTab("Info")
+local TabInfo = Window:AddTab("Info", { Icon = "I" })
 local BoxInfo = TabInfo:AddGroupbox("Supported Games")
 local InfoStatusLabel = BoxInfo:AddLabel("Loading…", { Color = T.TextMuted })
 local infoEntryLabels = {}
@@ -617,7 +510,8 @@ local function RefreshInfo()
     local places, truncatedOrReason = KeyAuth.ListPlaces()
     if not places then
         InfoStatusLabel.Text = "Couldn't reach the server: " .. tostring(truncatedOrReason)
-        InfoStatusLabel.TextColor3 = Color3.fromRGB(196, 96, 84)
+        InfoStatusLabel.TextColor3 = Color3.fromRGB(210, 120, 108)
+        overviewCards.Game.Text = tostring(PlaceId)
         return
     end
 
@@ -644,9 +538,8 @@ task.spawn(RefreshInfo)
 --  Authenticated state instead of the key field.
 -- ══════════════════════════════════════════════════════════════
 local ReopenOrb = nil
-local ReopenWindow -- forward-declared: BuildReopenOrb's click handler closes over
-                    -- this local and calls it once assigned below, rather than
-                    -- creating an implicit global function.
+local ReopenWindow -- forward-declared: BuildReopenOrb's click handler closes
+                    -- over this local and calls it once assigned below.
 
 local function BuildReopenOrb()
     if ReopenOrb then return ReopenOrb end
@@ -672,6 +565,9 @@ local function BuildReopenOrb()
         s.Thickness = 1
         s.Parent = orb
     end
+    Window:AddShadow(orb, { CornerRadius = 22, Layers = {
+        { pad = 3, alpha = 0.14 }, { pad = 7, alpha = 0.08 }, { pad = 12, alpha = 0.04 },
+    } })
 
     local dot = Instance.new("Frame")
     dot.Size                   = UDim2.fromOffset(10, 10)
@@ -691,12 +587,13 @@ local function BuildReopenOrb()
         TweenSvc:Create(orb, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 1 - T.WindowBgAlpha }):Play()
     end)
 
-    -- Draggable, same technique AxiUI's own window uses internally (that
-    -- helper isn't exposed for reuse, so this is a small self-contained copy).
+    -- Draggable, same technique AxiUI's own window uses internally.
     local dragging, dragInput, mouseStart, orbStart = false, nil, nil, nil
+    local dragDistance = 0
     orb.InputBegan:Connect(function(inp)
         if inp.UserInputType ~= Enum.UserInputType.MouseButton1 and inp.UserInputType ~= Enum.UserInputType.Touch then return end
         dragging  = true
+        dragDistance = 0
         mouseStart = inp.Position
         orbStart   = orb.Position
         inp.Changed:Connect(function()
@@ -706,24 +603,13 @@ local function BuildReopenOrb()
     orb.InputChanged:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch then
             dragInput = inp
+            if dragging then dragDistance = dragDistance + 1 end
         end
     end)
     UIS.InputChanged:Connect(function(inp)
         if inp ~= dragInput or not dragging then return end
         local delta = inp.Position - mouseStart
         orb.Position = UDim2.fromOffset(orbStart.X.Offset + delta.X, orbStart.Y.Offset + delta.Y)
-    end)
-
-    local dragDistance = 0
-    orb.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-            dragDistance = 0
-        end
-    end)
-    orb.InputChanged:Connect(function(inp)
-        if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
-            dragDistance = dragDistance + 1
-        end
     end)
     orb.MouseButton1Click:Connect(function()
         if dragDistance < 4 then
@@ -735,24 +621,18 @@ local function BuildReopenOrb()
     return orb
 end
 
--- Macro transitions (window open/close, tab switch) use Exponential easing
--- at ~0.45-0.55s -- confirmed against Rayfield's own source, which is
--- overwhelmingly Exponential-eased at 0.4-0.7s for exactly these kinds of
--- transitions. The short Sine/Quart/Back tweens used here originally
--- (0.1-0.35s) read as an abrupt snap by comparison -- slower and smoother
--- is what actually reads as "premium," not faster.
 local OPEN_CLOSE_TWEEN = TweenInfo.new(0.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
 
 ReopenWindow = function()
     if not ReopenOrb then return end
     local vp = workspace.CurrentCamera.ViewportSize
     Window.Frame.Visible = true
-    Window.Frame.Size = UDim2.fromOffset(WIDTH * 0.9, (BASE_HEIGHT + HEADER_H) * 0.9)
+    Window.Frame.Size = UDim2.fromOffset(WIDTH * 0.9, HEIGHT * 0.9)
     Window.Frame.BackgroundTransparency = 1
     Window.Frame.Position = UDim2.fromOffset(math.floor(vp.X / 2), math.floor(vp.Y / 2))
     SetBlur(true)
     TweenSvc:Create(Window.Frame, OPEN_CLOSE_TWEEN, {
-        Size = UDim2.fromOffset(WIDTH, BASE_HEIGHT + HEADER_H),
+        Size = UDim2.fromOffset(WIDTH, HEIGHT),
         BackgroundTransparency = 1 - T.WindowBgAlpha,
     }):Play()
     TweenSvc:Create(ReopenOrb, TweenInfo.new(0.3, Enum.EasingStyle.Exponential), { BackgroundTransparency = 1 }):Play()
@@ -764,7 +644,7 @@ local function CloseToOrb()
     local frame = Window.Frame
     SetBlur(false)
     TweenSvc:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.In), {
-        Size = UDim2.fromOffset(WIDTH * 0.9, (BASE_HEIGHT + HEADER_H) * 0.9),
+        Size = UDim2.fromOffset(WIDTH * 0.9, HEIGHT * 0.9),
         BackgroundTransparency = 1,
     }):Play()
     task.delay(0.4, function()
@@ -779,12 +659,10 @@ end
 
 -- ══════════════════════════════════════════════════════════════
 --  AUTH SUCCESS — shared by fresh key entry and the silent cached path.
---  skipOpenAnimation is true for the cached path: the window is never
---  actually shown before collapsing to the orb.
 -- ══════════════════════════════════════════════════════════════
 local function OnLoadStage(key)
-    local ok, source = KeyAuth.FetchScriptForPlace(PlaceId, key)
-    if not ok then
+    local fetchOk, source = KeyAuth.FetchScriptForPlace(PlaceId, key)
+    if not fetchOk then
         warn("[UniversalKeyGate] Script fetch failed: " .. tostring(source))
         return
     end
@@ -831,7 +709,7 @@ local function SubmitKey()
     local key = CleanKey(AxiUI.Flags["KeyInput"])
     if key == "" then
         StatusLabel.Text = "Enter a key first."
-        StatusLabel.TextColor3 = Color3.fromRGB(196, 96, 84)
+        StatusLabel.TextColor3 = Color3.fromRGB(210, 120, 108)
         Shake(Window.Frame)
         return
     end
@@ -841,16 +719,18 @@ local function SubmitKey()
     StatusLabel.Text = "Checking key..."
     StatusLabel.TextColor3 = T.TextMuted
 
-    local ok, reason, resolvedScript, expiresAt = KeyAuth.VerifyForPlace(PlaceId, key)
+    local verifyOk, reason, resolvedScript, expiresAt = KeyAuth.VerifyForPlace(PlaceId, key)
 
     validating = false
-    if ok then
+    if verifyOk then
         AxiUI:Notify("Access", "Key accepted.", 2)
         OnAuthenticated(key, resolvedScript, expiresAt, false)
     else
         ValidateBtn.Button.Text = "Validate"
         StatusLabel.Text = reason or "Invalid key — try again."
-        StatusLabel.TextColor3 = Color3.fromRGB(196, 96, 84)
+        StatusLabel.TextColor3 = Color3.fromRGB(210, 120, 108)
+        overviewCards.Status.Text = "Invalid"
+        overviewCards.Status.TextColor3 = Color3.fromRGB(210, 120, 108)
         Shake(Window.Frame)
     end
 end
@@ -867,8 +747,8 @@ local function TrySilentLoad()
     if not cachedKey or cachedUserId ~= tostring(LocalPlayer.UserId) then
         return false
     end
-    local ok, _, resolvedScript, expiresAt = KeyAuth.VerifyForPlace(PlaceId, cachedKey)
-    if not ok then
+    local verifyOk, _, resolvedScript, expiresAt = KeyAuth.VerifyForPlace(PlaceId, cachedKey)
+    if not verifyOk then
         return false
     end
     OnAuthenticated(cachedKey, resolvedScript, expiresAt, true)
@@ -883,9 +763,6 @@ end
 Window.Frame.Visible = false
 
 if not TrySilentLoad() then
-    -- ══════════════════════════════════════════════════════════════
-    --  ENTRANCE ANIMATION — only for the fresh-entry path.
-    -- ══════════════════════════════════════════════════════════════
     Window.Frame.Visible = true
     local frame = Window.Frame
     local targetSize  = frame.Size
@@ -899,4 +776,12 @@ if not TrySilentLoad() then
         Size = targetSize,
         BackgroundTransparency = targetAlpha,
     }):Play()
+end
+
+overviewCards.Status.Text = overviewCards.Status.Text == "Checking…" and "Enter a key" or overviewCards.Status.Text
+
+end)
+
+if not ok then
+    warn("[UniversalKeyGate] Failed to build UI: " .. tostring(err))
 end
