@@ -112,10 +112,15 @@ local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/axiui-keygate/main
 local AxiUI = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_Framework.lua"))()
 local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.lua"))()
 
+-- Transparency capped at 60% everywhere (Alpha = 1 - Transparency, so
+-- Alpha >= 0.4 throughout this file) -- an earlier pass here regressed
+-- back down to the mockup's raw, uncapped CSS opacity values (0.05/0.05/
+-- 0.08 = 92-95% see-through) while porting the Superdesign draft, undoing
+-- an already-fixed "everything unreadable" correction from before that.
 AxiUI:SetTheme({
-    GroupboxBg      = Color3.fromRGB(255, 255, 255),  GroupboxBgAlpha = 0.05,
-    ElementBg       = Color3.fromRGB(255, 255, 255),  ElementBgAlpha  = 0.05,
-    Border          = Color3.fromRGB(255, 255, 255),  BorderAlpha     = 0.08,
+    GroupboxBg      = Color3.fromRGB(255, 255, 255),  GroupboxBgAlpha = 0.45,
+    ElementBg       = Color3.fromRGB(255, 255, 255),  ElementBgAlpha  = 0.42,
+    Border          = Color3.fromRGB(255, 255, 255),  BorderAlpha     = 0.40,
 })
 
 -- Near-black glass, matching the approved design's dark gradient window
@@ -128,8 +133,8 @@ ThemeManager:AddTheme("Glass", {
     Accent        = Color3.fromRGB(150, 178, 205),  AccentAlpha    = 0.30,
     AccentStrong  = Color3.fromRGB(205, 222, 238),
     TextPrimary   = Color3.fromRGB(255, 255, 255),
-    TextSecondary = Color3.fromRGB(200, 200, 210),
-    TextMuted     = Color3.fromRGB(140, 140, 155),
+    TextSecondary = Color3.fromRGB(212, 214, 222),
+    TextMuted     = Color3.fromRGB(168, 172, 184),
 })
 ThemeManager:Apply("Glass")
 
@@ -225,7 +230,7 @@ AvatarImg.Name                  = "Avatar"
 AvatarImg.Size                  = UDim2.fromOffset(AVATAR_SIZE, AVATAR_SIZE)
 AvatarImg.Position              = UDim2.fromOffset(16, (HEADER_H - AVATAR_SIZE) / 2)
 AvatarImg.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
-AvatarImg.BackgroundTransparency = 0.9
+AvatarImg.BackgroundTransparency = 0.55
 AvatarImg.BorderSizePixel       = 0
 AvatarImg.Image                 = ""
 AvatarImg.ScaleType             = Enum.ScaleType.Crop
@@ -283,7 +288,7 @@ local function Panel(parent, size, position)
     p.Size                   = size
     p.Position               = position or UDim2.fromOffset(0, 0)
     p.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
-    p.BackgroundTransparency = 0.96
+    p.BackgroundTransparency = 0.55
     p.BorderSizePixel        = 0
     p.Parent                 = parent
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = p
@@ -300,20 +305,20 @@ local function StatCard(parent, opts)
     card.Size                   = opts.Size
     card.Position               = opts.Position or UDim2.fromOffset(0, 0)
     card.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
-    card.BackgroundTransparency = opts.Tint and 0.94 or 0.96
+    card.BackgroundTransparency = opts.Tint and 0.50 or 0.55
     card.BorderSizePixel        = 0
     card.Parent                 = parent
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = card
     local strokeColor = opts.Tint or T.Border
     local s = Instance.new("UIStroke")
-    s.Color = strokeColor; s.Transparency = opts.Tint and 0.75 or (1 - T.BorderAlpha); s.Thickness = 1; s.Parent = card
+    s.Color = strokeColor; s.Transparency = opts.Tint and 0.55 or (1 - T.BorderAlpha); s.Thickness = 1; s.Parent = card
 
     if opts.Href then
         card.MouseEnter:Connect(function()
-            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = (opts.Tint and 0.90 or 0.92) }):Play()
+            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = (opts.Tint and 0.40 or 0.45) }):Play()
         end)
         card.MouseLeave:Connect(function()
-            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = opts.Tint and 0.94 or 0.96 }):Play()
+            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = opts.Tint and 0.50 or 0.55 }):Play()
         end)
         card.MouseButton1Click:Connect(opts.Href)
     end
@@ -326,12 +331,12 @@ local function AddIconSquare(parent, color, letter, size, pos)
     sq.Size                   = UDim2.fromOffset(size, size)
     sq.Position               = pos
     sq.BackgroundColor3       = color
-    sq.BackgroundTransparency = 0.88
+    sq.BackgroundTransparency = 0.55
     sq.BorderSizePixel        = 0
     sq.Parent                 = parent
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, math.floor(size * 0.3)); c.Parent = sq
     local s = Instance.new("UIStroke")
-    s.Color = color; s.Transparency = 0.75; s.Thickness = 1; s.Parent = sq
+    s.Color = color; s.Transparency = 0.5; s.Thickness = 1; s.Parent = sq
     local lbl = Instance.new("TextLabel")
     lbl.Size                   = UDim2.new(1, 0, 1, 0)
     lbl.BackgroundTransparency = 1
@@ -367,7 +372,7 @@ Toast.Size                   = UDim2.fromOffset(180, 34)
 Toast.AnchorPoint             = Vector2.new(0.5, 1)
 Toast.Position                = UDim2.new(0.5, 0, 1, 40)
 Toast.BackgroundColor3        = Color3.fromRGB(255, 255, 255)
-Toast.BackgroundTransparency  = 0.85
+Toast.BackgroundTransparency  = 0.5
 Toast.BorderSizePixel         = 0
 Toast.Font                    = Enum.Font.GothamBold
 Toast.TextSize                = 12
@@ -509,7 +514,7 @@ do
     iconCircle.Size = UDim2.fromOffset(48, 48)
     iconCircle.Position = UDim2.new(0.5, -24, 0, 20)
     iconCircle.BackgroundColor3 = COLOR_DASH
-    iconCircle.BackgroundTransparency = 0.88
+    iconCircle.BackgroundTransparency = 0.55
     iconCircle.BorderSizePixel = 0
     iconCircle.Parent = EntryView
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = iconCircle
@@ -525,7 +530,7 @@ local KeyInputBox = Instance.new("TextBox")
 KeyInputBox.Size = UDim2.new(1, -32, 0, 34)
 KeyInputBox.Position = UDim2.fromOffset(16, 142)
 KeyInputBox.BackgroundColor3 = Color3.fromRGB(255,255,255)
-KeyInputBox.BackgroundTransparency = 0.94
+KeyInputBox.BackgroundTransparency = 0.5
 KeyInputBox.BorderSizePixel = 0
 KeyInputBox.Font = Enum.Font.GothamMedium
 KeyInputBox.TextSize = 11
@@ -545,7 +550,7 @@ local ValidateBtnFrame = Instance.new("TextButton")
 ValidateBtnFrame.Size = UDim2.new(1, -32, 0, 36)
 ValidateBtnFrame.Position = UDim2.fromOffset(16, 180)
 ValidateBtnFrame.BackgroundColor3 = COLOR_DASH
-ValidateBtnFrame.BackgroundTransparency = 0.8
+ValidateBtnFrame.BackgroundTransparency = 0.5
 ValidateBtnFrame.BorderSizePixel = 0
 ValidateBtnFrame.AutoButtonColor = false
 ValidateBtnFrame.Font = Enum.Font.GothamBold
@@ -555,7 +560,7 @@ ValidateBtnFrame.Text = "VALIDATE LICENSE"
 ValidateBtnFrame.Parent = EntryView
 do
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = ValidateBtnFrame
-    local s = Instance.new("UIStroke"); s.Color = COLOR_DASH; s.Transparency = 0.65; s.Thickness = 1; s.Parent = ValidateBtnFrame
+    local s = Instance.new("UIStroke"); s.Color = COLOR_DASH; s.Transparency = 0.5; s.Thickness = 1; s.Parent = ValidateBtnFrame
 end
 
 local AuthedView = Instance.new("Frame")
@@ -697,7 +702,7 @@ local function AddInfoRow(place)
     local row = Instance.new("TextButton")
     row.Size = UDim2.new(1, 0, 0, 48)
     row.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    row.BackgroundTransparency = 0.96
+    row.BackgroundTransparency = 0.55
     row.BorderSizePixel = 0
     row.Text = ""
     row.AutoButtonColor = false
@@ -713,7 +718,7 @@ local function AddInfoRow(place)
     liveTag.Size = UDim2.fromOffset(38, 14)
     liveTag.Position = UDim2.new(1, -80, 0, 17)
     liveTag.BackgroundColor3 = COLOR_INFO
-    liveTag.BackgroundTransparency = 0.85
+    liveTag.BackgroundTransparency = 0.5
     liveTag.BorderSizePixel = 0
     liveTag.Font = Enum.Font.GothamBold
     liveTag.TextSize = 8
@@ -725,10 +730,10 @@ local function AddInfoRow(place)
     local copyLbl = Label(row, "Copy ID", 9, T.TextMuted, UDim2.new(1, -34, 0, 17), UDim2.fromOffset(30, 14), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
 
     row.MouseEnter:Connect(function()
-        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.92 }):Play()
+        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.45 }):Play()
     end)
     row.MouseLeave:Connect(function()
-        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.96 }):Play()
+        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.55 }):Play()
     end)
     row.MouseButton1Click:Connect(function()
         pcall(setclipboard, tostring(place.placeId))
