@@ -72,8 +72,13 @@ local PlaceId = game.PlaceId
 -- visually but would otherwise get sent as part of the key.
 local function CleanKey(s)
     s = tostring(s or "")
-    s = s:gsub("\226\128\139", "")
-    s = s:gsub("^%s+", ""):gsub("%s+$", "")
+    s = s:gsub("\226\128\139", "") -- zero-width space (U+200B)
+    -- Strip whitespace ANYWHERE, not just at the ends -- a real key is a
+    -- plain dash-separated hex string and never legitimately contains
+    -- whitespace, so this is safe, and it's what actually catches a hidden
+    -- line break from a source that word-wrapped the key when it was
+    -- copied (trim-only misses this: it only strips at the string's ends).
+    s = s:gsub("%s+", "")
     return s
 end
 
