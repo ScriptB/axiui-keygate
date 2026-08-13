@@ -560,11 +560,14 @@ end
 -- ownership and sync live in one place, permanently connected.
 function AxiUI:AddShadow(target, options)
     options = options or {}
+    -- Nudged stronger than the original pass (0.16/0.10/0.06/0.03) for
+    -- better window/UI definition against a variable backdrop -- still a
+    -- soft falloff, not a hard outline.
     local layers = options.Layers or {
-        { pad = 5,  alpha = 0.16 },
-        { pad = 11, alpha = 0.10 },
-        { pad = 19, alpha = 0.06 },
-        { pad = 30, alpha = 0.03 },
+        { pad = 5,  alpha = 0.22 },
+        { pad = 11, alpha = 0.14 },
+        { pad = 19, alpha = 0.08 },
+        { pad = 30, alpha = 0.04 },
     }
     local baseRadius = options.CornerRadius or 12
 

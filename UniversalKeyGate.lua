@@ -66,7 +66,7 @@ BlurEffect.Parent        = Lighting
 
 local function SetBlur(on)
     TweenSvc:Create(BlurEffect, TweenInfo.new(0.35, Enum.EasingStyle.Exponential), {
-        FarIntensity = on and 0.6 or 0,
+        FarIntensity = on and 0.78 or 0,
     }):Play()
     if on then
         BlurEffect.Enabled = true
@@ -146,6 +146,15 @@ ThemeManager:Apply("Glass")
 
 local T = AxiUI.Theme
 
+-- Subtle text-shadow (Roblox TextLabel/TextButton/TextBox's own built-in
+-- TextStroke, not a separate UIStroke Instance -- cheaper and this is
+-- literally what it's for) applied everywhere text renders, so readability
+-- holds regardless of what's behind the glass at any given moment.
+-- Deliberately restrained (mostly-transparent, no glow/thick outline) --
+-- a readability aid, not a visual effect of its own.
+local TEXT_STROKE_TRANSPARENCY = 0.72
+local TEXT_STROKE_COLOR = Color3.new(0, 0, 0)
+
 -- Per-tab accent colors, matching the approved design (each tab keeps its
 -- own hue rather than one shared accent) -- also reused for Dashboard/Info
 -- card icon tints so the same color language carries through the whole UI.
@@ -205,8 +214,12 @@ end
 -- to Window.Frame's own Position/Size/Visible, cannot desync from it.
 Window:AddShadow(Window.Frame)
 
--- Diagonal glass sheen, approximating the reference gradient window
--- background's light variation.
+-- Diagonal glass sheen -- a UIGradient modulates Window.Frame's OWN
+-- background, so it's only actually visible in the plain gaps between
+-- cards (any card sitting on top masks it there), which is exactly the
+-- "glass effect on the non-text, non-box parts" being asked for. Nudged
+-- more visible than the original near-invisible pass (94-98.5%
+-- transparent), still restrained -- a highlight, not a strong effect.
 do
     local sheen = Instance.new("UIGradient")
     sheen.Color = ColorSequence.new({
@@ -215,9 +228,9 @@ do
         ColorSequenceKeypoint.new(1,   Color3.fromRGB(190, 205, 220)),
     })
     sheen.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0,   0.94),
-        NumberSequenceKeypoint.new(0.5, 0.985),
-        NumberSequenceKeypoint.new(1,   0.94),
+        NumberSequenceKeypoint.new(0,   0.86),
+        NumberSequenceKeypoint.new(0.5, 0.95),
+        NumberSequenceKeypoint.new(1,   0.86),
     })
     sheen.Rotation = 105
     sheen.Parent = Window.Frame
@@ -295,6 +308,8 @@ GreetingLbl.TextColor3             = T.TextPrimary
 GreetingLbl.TextXAlignment         = Enum.TextXAlignment.Left
 GreetingLbl.TextTruncate           = Enum.TextTruncate.AtEnd
 GreetingLbl.Text                   = GetGreeting()
+GreetingLbl.TextStrokeColor3       = TEXT_STROKE_COLOR
+GreetingLbl.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
 GreetingLbl.Parent                 = HeaderRow
 
 local SubLbl = Instance.new("TextLabel")
@@ -307,6 +322,8 @@ SubLbl.TextColor3             = T.TextMuted
 SubLbl.TextXAlignment         = Enum.TextXAlignment.Left
 SubLbl.TextTruncate           = Enum.TextTruncate.AtEnd
 SubLbl.Text                   = "Current Session ID: " .. tostring(PlaceId)
+SubLbl.TextStrokeColor3       = TEXT_STROKE_COLOR
+SubLbl.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
 SubLbl.Parent                 = HeaderRow
 
 -- ══════════════════════════════════════════════════════════════
@@ -373,6 +390,8 @@ local function AddIconSquare(parent, color, letter, size, pos)
     lbl.TextSize               = math.floor(size * 0.4)
     lbl.TextColor3             = color
     lbl.Text                   = letter
+    lbl.TextStrokeColor3       = TEXT_STROKE_COLOR
+    lbl.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
     lbl.Parent                 = sq
     return sq
 end
@@ -388,6 +407,8 @@ local function Label(parent, text, size, color, pos, sz, font, align)
     l.TextXAlignment          = align or Enum.TextXAlignment.Left
     l.TextTruncate            = Enum.TextTruncate.AtEnd
     l.Text                   = text
+    l.TextStrokeColor3       = TEXT_STROKE_COLOR
+    l.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
     l.Parent                 = parent
     return l
 end
@@ -407,6 +428,8 @@ Toast.Font                    = Enum.Font.GothamBold
 Toast.TextSize                = 12
 Toast.TextColor3              = T.TextPrimary
 Toast.Text                    = ""
+Toast.TextStrokeColor3        = TEXT_STROKE_COLOR
+Toast.TextStrokeTransparency  = TEXT_STROKE_TRANSPARENCY
 Toast.ZIndex                  = 40
 Toast.Parent                  = Window.Frame
 do
@@ -567,6 +590,8 @@ KeyInputBox.TextColor3 = T.TextPrimary
 KeyInputBox.PlaceholderText = "Enter activation key..."
 KeyInputBox.PlaceholderColor3 = T.TextMuted
 KeyInputBox.Text = ""
+KeyInputBox.TextStrokeColor3 = TEXT_STROKE_COLOR
+KeyInputBox.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
 KeyInputBox.ClearTextOnFocus = false
 KeyInputBox.Parent = EntryView
 do
@@ -586,6 +611,8 @@ ValidateBtnFrame.Font = Enum.Font.GothamBold
 ValidateBtnFrame.TextSize = 11
 ValidateBtnFrame.TextColor3 = COLOR_DASH
 ValidateBtnFrame.Text = "VALIDATE LICENSE"
+ValidateBtnFrame.TextStrokeColor3 = TEXT_STROKE_COLOR
+ValidateBtnFrame.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
 ValidateBtnFrame.Parent = EntryView
 do
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = ValidateBtnFrame
@@ -753,6 +780,8 @@ local function AddInfoRow(place)
     liveTag.TextSize = 8
     liveTag.TextColor3 = COLOR_INFO
     liveTag.Text = "LIVE"
+    liveTag.TextStrokeColor3 = TEXT_STROKE_COLOR
+    liveTag.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
     liveTag.Parent = row
     do local c2 = Instance.new("UICorner"); c2.CornerRadius = UDim.new(0,4); c2.Parent = liveTag end
 
