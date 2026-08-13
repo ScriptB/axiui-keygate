@@ -12,10 +12,17 @@
     SCRIPTS_KV upload on the Worker side.
 
     All Worker communication is delegated to the shared keyauth.lua module
-    (same one Finite/FiniteLoader.lua uses) via KeyAuth.VerifyForPlace /
-    KeyAuth.FetchScriptForPlace — this file only builds the AxiUI window
-    around it. No local HTTP bridge, no local JSON handling, no local
-    validity decision: every "is this allowed" answer comes from the Worker.
+    (same one Finite uses) via KeyAuth.VerifyForPlace / FetchScriptForPlace
+    — this file only builds the AxiUI window around it. No local HTTP
+    bridge, no local JSON handling, no local validity decision: every
+    "is this allowed" answer comes from the Worker.
+
+    A key that already validated for THIS game is cached per-PlaceId (via
+    KeyAuth.SaveCachedKey/LoadCachedKey) — rejoining the same game with a
+    still-valid key skips this UI entirely and loads straight through.
+    Joining a DIFFERENT game always prompts once, even with an existing
+    cached key from elsewhere, since the cache file is namespaced per
+    PlaceId on purpose (see TrySilentLoad below).
 
     See Documentation/KV-Script-Hosting-Plan.md for the full architecture.
 
@@ -25,27 +32,82 @@
         ))()
 ]]
 
+local Players     = game:GetService("Players")
+local TweenSvc    = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+
 -- ══════════════════════════════════════════════════════════════
---  LOAD AXIUI
+--  LOAD KEYAUTH — shared Worker-communication module. Loaded before AxiUI
+--  so a still-valid cached key can skip straight to loading without ever
+--  building a window at all.
+-- ══════════════════════════════════════════════════════════════
+local KEYAUTH_MODULE_URL = "https://finite-log-proxy.asuneteric.workers.dev/keyauth.lua"
+
+local KeyAuth = loadstring(game:HttpGet(KEYAUTH_MODULE_URL))()
+if type(KeyAuth) ~= "table"
+    or type(KeyAuth.VerifyForPlace) ~= "function"
+    or type(KeyAuth.FetchScriptForPlace) ~= "function"
+    or type(KeyAuth.LoadCachedKey) ~= "function"
+    or type(KeyAuth.SaveCachedKey) ~= "function"
+then
+    warn("[UniversalKeyGate] Failed to load KeyAuth module from " .. KEYAUTH_MODULE_URL .. " -- aborting")
+    return
+end
+
+local PlaceId = game.PlaceId
+
+-- Namespaced per-PlaceId (not global) so returning to an already-validated
+-- game skips this UI entirely, but a new game still prompts once -- even
+-- though the same underlying key would likely work there too (keys are
+-- usually scoped "*"), that first-time prompt per game is deliberate.
+local CACHE_FILE = "universalkeygate_place_" .. tostring(PlaceId) .. ".json"
+
+local function RunPayload(source)
+    local runOk, err = pcall(function()
+        loadstring(source)()
+    end)
+    if not runOk then
+        warn("[UniversalKeyGate] Script exec failed: " .. tostring(err))
+    end
+end
+
+-- Silent path: a cached key from a previous validated run in THIS exact
+-- game, still valid right now. Returns true if it successfully loaded
+-- (caller should stop here, no UI needed) -- false means fall through to
+-- the normal AxiUI gate window (no cache, wrong account, expired/revoked,
+-- or this game's mapping changed since the cache was written).
+local function TrySilentLoad()
+    local cachedKey, cachedUserId = KeyAuth.LoadCachedKey(CACHE_FILE)
+    if not cachedKey or cachedUserId ~= tostring(LocalPlayer.UserId) then
+        return false
+    end
+
+    local ok = KeyAuth.VerifyForPlace(PlaceId, cachedKey)
+    if not ok then
+        return false
+    end
+
+    local fetchOk, payload = KeyAuth.FetchScriptForPlace(PlaceId, cachedKey)
+    if not fetchOk then
+        warn("[UniversalKeyGate] Cached-key script fetch failed: " .. tostring(payload))
+        return false
+    end
+
+    RunPayload(payload)
+    return true
+end
+
+if TrySilentLoad() then
+    return
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  LOAD AXIUI — only reached if the silent path above didn't apply.
 -- ══════════════════════════════════════════════════════════════
 local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/Universal-Scripts/main/AxiUI/"
 
 local AxiUI = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_Framework.lua"))()
 loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.lua"))()
-
-local TweenSvc = game:GetService("TweenService")
-
--- ══════════════════════════════════════════════════════════════
---  LOAD KEYAUTH — shared Worker-communication module. Same file every
---  script in this project uses; this loader adds no HTTP logic of its own.
--- ══════════════════════════════════════════════════════════════
-local KEYAUTH_MODULE_URL = "https://finite-log-proxy.asuneteric.workers.dev/keyauth.lua"
-
-local KeyAuth = loadstring(game:HttpGet(KEYAUTH_MODULE_URL))()
-if type(KeyAuth) ~= "table" or type(KeyAuth.VerifyForPlace) ~= "function" or type(KeyAuth.FetchScriptForPlace) ~= "function" then
-    warn("[UniversalKeyGate] Failed to load KeyAuth module from " .. KEYAUTH_MODULE_URL .. " -- aborting")
-    return
-end
 
 -- ══════════════════════════════════════════════════════════════
 --  FLAT, SOLID THEME  (no gradients, no glow, no neon purple/blue/green)
@@ -64,8 +126,6 @@ AxiUI:SetTheme({
 
 local FLAT_SUCCESS = Color3.fromRGB(126, 158, 110)
 local FLAT_ERROR    = Color3.fromRGB(196, 96,  84)
-
-local PlaceId = game.PlaceId
 
 -- Pasting into a Roblox TextBox commonly drags in invisible characters
 -- (trailing newline, stray spaces, zero-width space U+200B) that don't show
@@ -147,12 +207,7 @@ local function OnLoadStage(key)
         warn("[UniversalKeyGate] Script fetch failed: " .. tostring(source))
         return
     end
-    local runOk, err = pcall(function()
-        loadstring(source)()
-    end)
-    if not runOk then
-        warn("[UniversalKeyGate] Script exec failed: " .. tostring(err))
-    end
+    RunPayload(source)
 end
 
 local function SubmitKey()
@@ -182,6 +237,10 @@ local function SubmitKey()
         StatusLabel.Text = "Access granted" .. (resolvedScript and (" — \"" .. resolvedScript .. "\".") or ".")
         StatusLabel.TextColor3 = FLAT_SUCCESS
         AxiUI:Notify("Access", "Key accepted.", 2)
+        -- Cached per-PlaceId -- a future run in THIS game will skip this
+        -- whole UI via TrySilentLoad above, as long as this key is still
+        -- valid then. A different game still prompts fresh.
+        KeyAuth.SaveCachedKey(CACHE_FILE, key)
         task.wait(0.4)
         PlayExit(function() OnLoadStage(key) end)
     else
