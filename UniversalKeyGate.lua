@@ -654,17 +654,17 @@ end
 -- already used for FPS.
 local dashFpsCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashFpsCard, COLOR_PERF, "F", 32, UDim2.fromOffset(12, 14))
-Label(dashFpsCard, "FPS RATE", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+Label(dashFpsCard, "FPS", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
 local dashFpsValue = Label(dashFpsCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
 local dashPingCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashPingCard, COLOR_DASH, "N", 32, UDim2.fromOffset(12, 14))
-Label(dashPingCard, "ENGINE LATENCY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+Label(dashPingCard, "LATENCY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
 local dashPingValue = Label(dashPingCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
 local dashMemCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashMemCard, COLOR_SET, "M", 32, UDim2.fromOffset(12, 14))
-Label(dashMemCard, "ALLOCATED MEMORY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+Label(dashMemCard, "MEMORY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
 local dashMemValue = Label(dashMemCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
 local dashOverview = Panel(TabDashboard.Scroll, UDim2.new(1, 0, 0, 100))
@@ -708,11 +708,11 @@ local function PerfRow(color, letter)
 end
 
 local fpsValueLbl, fpsLabelLbl = PerfRow(COLOR_PERF, "F")
-fpsLabelLbl.Text = "FPS RATE"
+fpsLabelLbl.Text = "FPS"
 local pingValueLbl, pingLabelLbl = PerfRow(COLOR_DASH, "N")
-pingLabelLbl.Text = "ENGINE LATENCY"
+pingLabelLbl.Text = "LATENCY"
 local memValueLbl, memLabelLbl = PerfRow(COLOR_SET, "M")
-memLabelLbl.Text = "ALLOCATED MEMORY"
+memLabelLbl.Text = "MEMORY"
 
 task.spawn(function()
     while true do
