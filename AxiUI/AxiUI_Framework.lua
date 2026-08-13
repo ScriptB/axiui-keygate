@@ -29,19 +29,27 @@ AxiUI.Version     = "1.0.0"
 --  Translucency stack (bottom → top):
 --    Game world → Window (82% opaque) → Groupbox (3.5% tint)
 --    → Element row (3% tint) → SubBox (2.5% tint)
---  One accent colour (soft lavender). Everything else is neutral.
+--  One accent colour (warm brass). Everything else is neutral.
+--
+--  This used to be "soft lavender" -- a violet/indigo accent on a
+--  blue-black window is precisely the "AI-generated UI" tell (traced to
+--  Tailwind's indigo-500 default saturating design-tool training data),
+--  not a deliberate choice. Replaced with a warm, desaturated brass/
+--  neutral direction. Any consumer applying its own ThemeManager theme
+--  (as UniversalKeyGate.lua does via ThemeManager:Apply) overrides these
+--  anyway -- this is just the fork's own honest default.
 -- ═══════════════════════════════════════════════════════════════
 AxiUI.Theme = {
-    WindowBg        = Color3.fromRGB(14,  16,  26),   WindowBgAlpha   = 0.82,
+    WindowBg        = Color3.fromRGB(16,  15,  13),   WindowBgAlpha   = 0.82,
     GroupboxBg      = Color3.fromRGB(255, 255, 255),   GroupboxBgAlpha = 0.035,
     ElementBg       = Color3.fromRGB(255, 255, 255),   ElementBgAlpha  = 0.03,
     SubBoxBg        = Color3.fromRGB(255, 255, 255),   SubBoxBgAlpha   = 0.025,
-    Accent          = Color3.fromRGB(160, 130, 255),   AccentAlpha     = 0.35,
-    AccentStrong    = Color3.fromRGB(200, 185, 255),
+    Accent          = Color3.fromRGB(190, 160, 110),   AccentAlpha     = 0.35,
+    AccentStrong    = Color3.fromRGB(225, 205, 165),
     Border          = Color3.fromRGB(255, 255, 255),   BorderAlpha     = 0.08,
-    TextPrimary     = Color3.fromRGB(220, 215, 255),
-    TextSecondary   = Color3.fromRGB(140, 130, 160),
-    TextMuted       = Color3.fromRGB(80,  75,  100),
+    TextPrimary     = Color3.fromRGB(226, 222, 214),
+    TextSecondary   = Color3.fromRGB(150, 145, 136),
+    TextMuted       = Color3.fromRGB(90,  86,  78),
     RadiusWindow    = UDim.new(0, 12),
     RadiusGroupbox  = UDim.new(0, 8),
     RadiusElement   = UDim.new(0, 6),
@@ -953,7 +961,7 @@ function Groupbox:AddToggle(key, opts)
     pill.Size             = UDim2.fromOffset(32,17)
     pill.AnchorPoint      = Vector2.new(1,0.5)
     pill.Position         = UDim2.new(1,-9,0.5,0)
-    pill.BackgroundColor3 = Color3.fromRGB(60,55,80)
+    pill.BackgroundColor3 = Color3.fromRGB(58,55,50)
     pill.BackgroundTransparency = 0.1
     pill.BorderSizePixel  = 0
     pill.Parent           = row
@@ -963,7 +971,7 @@ function Groupbox:AddToggle(key, opts)
     local thumb = Instance.new("Frame")
     thumb.Size             = UDim2.fromOffset(11,11)
     thumb.Position         = UDim2.fromOffset(2,3)
-    thumb.BackgroundColor3 = Color3.fromRGB(100,95,120)
+    thumb.BackgroundColor3 = Color3.fromRGB(105,100,92)
     thumb.BorderSizePixel  = 0
     thumb.Parent           = pill
     AddCorner(thumb, T.RadiusPill)
@@ -976,10 +984,10 @@ function Groupbox:AddToggle(key, opts)
             Tween(thumb, { Position = UDim2.fromOffset(19,3),
                            BackgroundColor3 = T.AccentStrong })
         else
-            Tween(pill,  { BackgroundColor3 = Color3.fromRGB(60,55,80),
+            Tween(pill,  { BackgroundColor3 = Color3.fromRGB(58,55,50),
                            BackgroundTransparency = 0.1 })
             Tween(thumb, { Position = UDim2.fromOffset(2,3),
-                           BackgroundColor3 = Color3.fromRGB(100,95,120) })
+                           BackgroundColor3 = Color3.fromRGB(105,100,92) })
         end
         if not silent and opts.Callback then pcall(opts.Callback, AxiUI.Flags[key]) end
     end
@@ -1065,7 +1073,7 @@ function Groupbox:AddSlider(key, opts)
     trackBar.Size             = UDim2.new(1, 0, 0, 3)
     trackBar.AnchorPoint      = Vector2.new(0, 0.5)
     trackBar.Position         = UDim2.new(0, 0, 0.5, 0)
-    trackBar.BackgroundColor3 = Color3.fromRGB(50, 45, 70)
+    trackBar.BackgroundColor3 = Color3.fromRGB(52, 48, 44)
     trackBar.BackgroundTransparency = 0.18
     trackBar.BorderSizePixel  = 0
     trackBar.Parent           = track
@@ -1318,7 +1326,7 @@ function Groupbox:AddKeybind(key, opts)
     pill.TextSize              = 9
     pill.TextColor3            = T.Accent
     pill.Text                  = currentKey == Enum.KeyCode.Unknown and "None" or currentKey.Name
-    pill.BackgroundColor3      = Color3.fromRGB(50,45,70)
+    pill.BackgroundColor3      = Color3.fromRGB(52,48,44)
     pill.BackgroundTransparency = 0.2
     pill.BorderSizePixel       = 0
     pill.AutoButtonColor       = false

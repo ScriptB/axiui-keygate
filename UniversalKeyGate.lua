@@ -128,23 +128,24 @@ local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.l
 -- that's the correct "light border" half of the look, only the FILL was
 -- the wrong tone.
 AxiUI:SetTheme({
-    GroupboxBg      = Color3.fromRGB(26, 29, 39),      GroupboxBgAlpha = 0.60,
-    ElementBg       = Color3.fromRGB(26, 29, 39),      ElementBgAlpha  = 0.60,
+    GroupboxBg      = Color3.fromRGB(27, 26, 24),      GroupboxBgAlpha = 0.60,
+    ElementBg       = Color3.fromRGB(27, 26, 24),      ElementBgAlpha  = 0.60,
     Border          = Color3.fromRGB(255, 255, 255),   BorderAlpha     = 0.40,
 })
 
--- Near-black glass, matching the approved design's dark gradient window
--- (rgba(15,15,25,.97) -> rgba(5,5,10,.99)) approximated as a flat near-black
--- at high opacity -- Roblox panels don't support a gradient window
--- background directly, the UIGradient sheen below adds the diagonal light
--- variation instead.
+-- Near-black glass, matching the approved design's dark gradient window,
+-- but shifted neutral-warm rather than blue-black -- same reasoning as
+-- COLOR_DASH/PANEL_TINT above: a blue-cast dark theme plus a blue Accent
+-- (toggles/sliders/dropdown highlights all read off Accent/AccentStrong,
+-- so this is the framework-wide default, not just one card) is exactly
+-- the generic-AI-dark-mode look, not a deliberate choice.
 ThemeManager:AddTheme("Glass", {
-    WindowBg      = Color3.fromRGB(10, 10, 16),     WindowBgAlpha  = 0.97,
-    Accent        = Color3.fromRGB(150, 178, 205),  AccentAlpha    = 0.30,
-    AccentStrong  = Color3.fromRGB(205, 222, 238),
+    WindowBg      = Color3.fromRGB(16, 15, 13),     WindowBgAlpha  = 0.97,
+    Accent        = Color3.fromRGB(190, 160, 110),  AccentAlpha    = 0.30,
+    AccentStrong  = Color3.fromRGB(225, 205, 165),
     TextPrimary   = Color3.fromRGB(255, 255, 255),
-    TextSecondary = Color3.fromRGB(212, 214, 222),
-    TextMuted     = Color3.fromRGB(168, 172, 184),
+    TextSecondary = Color3.fromRGB(214, 212, 206),
+    TextMuted     = Color3.fromRGB(176, 172, 164),
 })
 ThemeManager:Apply("Glass")
 
@@ -162,11 +163,19 @@ local TEXT_STROKE_COLOR = Color3.new(0, 0, 0)
 -- Per-tab accent colors, matching the approved design (each tab keeps its
 -- own hue rather than one shared accent) -- also reused for Dashboard/Info
 -- card icon tints so the same color language carries through the whole UI.
-local COLOR_DASH  = Color3.fromRGB(96,  165, 250)  -- blue-400
-local COLOR_LIC   = Color3.fromRGB(52,  211, 153)  -- emerald-400
-local COLOR_SET   = Color3.fromRGB(192, 132, 252)  -- purple-400
-local COLOR_PERF  = Color3.fromRGB(251, 146, 60)   -- orange-400
-local COLOR_INFO  = Color3.fromRGB(34,  211, 238)  -- cyan-400
+--
+-- These used to be Tailwind's stock blue-400/purple-400/cyan-400/etc --
+-- researched afterward and confirmed that exact trio (blue/purple/cyan
+-- neon-on-dark) is *the* most commonly cited "this is AI-generated" tell,
+-- traced directly to those same Tailwind defaults saturating design-tool
+-- training data. Replaced with a muted, warm/neutral "material" palette
+-- (brass, sage, clay, slate, sand) -- no blue, no purple, no cyan, and
+-- desaturated rather than the punchy stock swatch values.
+local COLOR_DASH  = Color3.fromRGB(198, 165, 96)   -- brass/gold
+local COLOR_LIC   = Color3.fromRGB(133, 163, 120)  -- sage
+local COLOR_SET   = Color3.fromRGB(178, 108, 92)   -- clay/terracotta
+local COLOR_PERF  = Color3.fromRGB(139, 152, 168)  -- slate
+local COLOR_INFO  = Color3.fromRGB(168, 154, 132)  -- sand
 local COLOR_BAD   = Color3.fromRGB(220, 120, 108)
 
 -- Panel fill tint. Researched glassmorphism guidance is explicit that the
@@ -176,8 +185,11 @@ local COLOR_BAD   = Color3.fromRGB(220, 120, 108)
 -- SetBlur's own comment) just washes out into a milky haze, which is
 -- exactly what pure-white panel fills at raised opacity were doing here.
 -- Dark base, slightly lighter than the window itself so panels still read
--- as a distinct raised surface.
-local PANEL_TINT = Color3.fromRGB(26, 29, 39)
+-- as a distinct raised surface. Neutral-warm charcoal, not a blue-black --
+-- the old (26,29,39) had a cool blue cast (B > G > R) that reinforced the
+-- same generic-AI-dark-mode look the accent colors above just moved away
+-- from.
+local PANEL_TINT = Color3.fromRGB(27, 26, 24)
 
 -- Blends PANEL_TINT toward an accent color by `amount` -- a subtly colored
 -- DARK glass (the "colored tint" variant the research calls out) rather
@@ -229,7 +241,7 @@ do
     sheen.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0,   Color3.fromRGB(255, 255, 255)),
         ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 255)),
-        ColorSequenceKeypoint.new(1,   Color3.fromRGB(190, 205, 220)),
+        ColorSequenceKeypoint.new(1,   Color3.fromRGB(215, 200, 175)),
     })
     sheen.Transparency = NumberSequence.new({
         NumberSequenceKeypoint.new(0,   0.86),
