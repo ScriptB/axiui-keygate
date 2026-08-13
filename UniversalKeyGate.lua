@@ -52,6 +52,7 @@ local TweenSvc     = game:GetService("TweenService")
 local UIS          = game:GetService("UserInputService")
 local StatsSvc     = game:GetService("Stats")
 local Lighting     = game:GetService("Lighting")
+local Marketplace  = game:GetService("MarketplaceService")
 local LocalPlayer = Players.LocalPlayer
 
 local setclipboard = setclipboard or function(text) print("[Clipboard]", text) end
@@ -337,10 +338,25 @@ SubLbl.TextSize               = 10
 SubLbl.TextColor3             = T.TextMuted
 SubLbl.TextXAlignment         = Enum.TextXAlignment.Left
 SubLbl.TextTruncate           = Enum.TextTruncate.AtEnd
-SubLbl.Text                   = "Current Session ID: " .. tostring(PlaceId)
+SubLbl.Text                   = "Loading game…"
 SubLbl.TextStrokeColor3       = TEXT_STROKE_COLOR
 SubLbl.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
 SubLbl.Parent                 = HeaderRow
+
+-- The actual game name, not the raw PlaceId -- MarketplaceService's
+-- GetProductInfo works for a PlaceId (a place is an asset in Roblox's
+-- catalog system), confirmed against the DevForum's own accepted answer
+-- before using it here. Yields (real HTTP call), so it runs on its own
+-- thread same as the avatar fetch above, and is pcall-wrapped since it
+-- can rate-limit/fail like any other MarketplaceService call.
+task.spawn(function()
+    local nameOk, info = pcall(Marketplace.GetProductInfo, Marketplace, PlaceId)
+    if nameOk and info and info.Name and info.Name ~= "" then
+        SubLbl.Text = info.Name
+    else
+        SubLbl.Text = "Place " .. tostring(PlaceId)
+    end
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  SMALL VISUAL HELPERS
@@ -754,7 +770,14 @@ local function ClearInfoEntries()
 end
 
 local function AddInfoRow(place)
-    local label = place.displayName or ("PlaceId " .. tostring(place.placeId))
+    -- Never permanently shows a raw PlaceId as the name -- if the Worker
+    -- has no admin-set displayName for this mapping, fetch the real game
+    -- name via MarketplaceService (a Place is an asset in Roblox's
+    -- catalog, so GetProductInfo works on a PlaceId; confirmed against
+    -- the DevForum's accepted answer before using it). "Place <id>" is
+    -- only ever a brief placeholder while that fetch is in flight.
+    local hasDisplayName = place.displayName ~= nil
+    local label = place.displayName or ("Place " .. tostring(place.placeId))
     local row = Instance.new("TextButton")
     row.Size = UDim2.new(1, 0, 0, 48)
     row.BackgroundColor3 = PANEL_TINT
@@ -767,8 +790,17 @@ local function AddInfoRow(place)
     local s = Instance.new("UIStroke"); s.Color = T.Border; s.Transparency = 1 - T.BorderAlpha; s.Thickness = 1; s.Parent = row
 
     AddIconSquare(row, COLOR_INFO, label:sub(1,1):upper(), 30, UDim2.fromOffset(10, 9))
-    Label(row, label, 11, T.TextPrimary, UDim2.fromOffset(50, 8), UDim2.new(1, -130, 0, 14), Enum.Font.GothamBold)
+    local nameLbl = Label(row, label, 11, T.TextPrimary, UDim2.fromOffset(50, 8), UDim2.new(1, -130, 0, 14), Enum.Font.GothamBold)
     Label(row, "ID: " .. tostring(place.placeId), 8, T.TextMuted, UDim2.fromOffset(50, 24), UDim2.new(1, -130, 0, 12), Enum.Font.Code)
+
+    if not hasDisplayName then
+        task.spawn(function()
+            local nameOk, info = pcall(Marketplace.GetProductInfo, Marketplace, place.placeId)
+            if nameOk and info and info.Name and info.Name ~= "" then
+                nameLbl.Text = info.Name
+            end
+        end)
+    end
 
     local liveTag = Instance.new("TextLabel")
     liveTag.Size = UDim2.fromOffset(38, 14)
@@ -950,6 +982,13 @@ local function CloseToOrb()
         TweenSvc:Create(ReopenOrb, TweenInfo.new(0.3, Enum.EasingStyle.Exponential), { BackgroundTransparency = 1 - T.WindowBgAlpha }):Play()
     end)
 end
+
+-- Wires the title bar's close button (added at the fork level) to the
+-- same minimize-to-orb animation used everywhere else the window closes
+-- -- without this, removing the macOS dots left no way to close the
+-- window at all once it's been reopened from the orb (the auto-close
+-- only ever fires once, right after a fresh key validates).
+Window.OnClose = CloseToOrb
 
 -- ══════════════════════════════════════════════════════════════
 --  AUTH SUCCESS

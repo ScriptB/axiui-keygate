@@ -654,10 +654,38 @@ function AxiUI:_BuildTitleBar()
     -- matches the reference design's understated title bar.
     local title = MakeLabel(bar, self.Title:upper(), 9, T.TextMuted,
         Enum.TextXAlignment.Left, Enum.Font.GothamMedium)
-    title.Size     = UDim2.new(1, -28, 1, 0)
+    title.Size     = UDim2.new(1, -52, 1, 0)
     title.Position = UDim2.fromOffset(14, 0)
 
+    -- Close button -- removing the macOS traffic-light dots also removed
+    -- the only close affordance that used to live here, with nothing put
+    -- back in its place. Without this, a window that isn't set to
+    -- auto-close (e.g. reopened from the orb) has no way to be closed
+    -- again at all. Defaults to just hiding the frame; a consumer can set
+    -- Window.OnClose to run its own close animation/logic instead (e.g.
+    -- minimize-to-orb) without this file needing to know that exists.
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size                   = UDim2.fromOffset(24, 24)
+    closeBtn.Position               = UDim2.new(1, -30, 0.5, -12)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.AutoButtonColor        = false
+    closeBtn.Font                   = Enum.Font.GothamBold
+    closeBtn.TextSize               = 15
+    closeBtn.TextColor3             = T.TextMuted
+    closeBtn.Text                   = "×"
+    closeBtn.Parent                 = bar
+    closeBtn.MouseEnter:Connect(function() Tween(closeBtn, { TextColor3 = T.TextPrimary }, 0.12) end)
+    closeBtn.MouseLeave:Connect(function() Tween(closeBtn, { TextColor3 = T.TextMuted }, 0.12) end)
+    closeBtn.MouseButton1Click:Connect(function()
+        if self.OnClose then
+            self.OnClose()
+        else
+            self.Frame.Visible = false
+        end
+    end)
+
     self.TitleBar = bar
+    self.CloseBtn = closeBtn
 end
 
 function AxiUI:_BuildTabRow()
