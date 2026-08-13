@@ -320,7 +320,7 @@ GreetingLbl.Size                   = UDim2.new(1, -(16 + AVATAR_SIZE + 10 + 12),
 GreetingLbl.Position               = UDim2.fromOffset(16 + AVATAR_SIZE + 10, HEADER_H / 2 - 16)
 GreetingLbl.BackgroundTransparency = 1
 GreetingLbl.Font                   = Enum.Font.GothamBold
-GreetingLbl.TextSize               = 13
+GreetingLbl.TextSize               = 15
 GreetingLbl.TextColor3             = T.TextPrimary
 GreetingLbl.TextXAlignment         = Enum.TextXAlignment.Left
 GreetingLbl.TextTruncate           = Enum.TextTruncate.AtEnd
@@ -333,8 +333,8 @@ local SubLbl = Instance.new("TextLabel")
 SubLbl.Size                   = GreetingLbl.Size
 SubLbl.Position               = UDim2.fromOffset(16 + AVATAR_SIZE + 10, HEADER_H / 2 + 1)
 SubLbl.BackgroundTransparency = 1
-SubLbl.Font                   = Enum.Font.Gotham
-SubLbl.TextSize               = 10
+SubLbl.Font                   = Enum.Font.GothamBold
+SubLbl.TextSize               = 12
 SubLbl.TextColor3             = T.TextMuted
 SubLbl.TextXAlignment         = Enum.TextXAlignment.Left
 SubLbl.TextTruncate           = Enum.TextTruncate.AtEnd
@@ -428,13 +428,19 @@ local function AddIconSquare(parent, color, letter, size, pos)
     return sq
 end
 
+-- Bumped up (+2 size, promoted to Bold) so every label built through this
+-- helper reads bolder/larger by default, applied here rather than at each
+-- of the ~50 call sites. Code font (the countdown timer, place/key IDs)
+-- is deliberately left alone -- it's a monospace "readout" style, not
+-- meant to look like normal bolded copy.
 local function Label(parent, text, size, color, pos, sz, font, align)
     local l = Instance.new("TextLabel")
     l.Size                   = sz
     l.Position               = pos
     l.BackgroundTransparency = 1
-    l.Font                   = font or Enum.Font.Gotham
-    l.TextSize               = size
+    local baseFont = font or Enum.Font.Gotham
+    l.Font                   = (baseFont == Enum.Font.Code) and baseFont or Enum.Font.GothamBold
+    l.TextSize               = size + 2
     l.TextColor3             = color
     l.TextXAlignment          = align or Enum.TextXAlignment.Left
     l.TextTruncate            = Enum.TextTruncate.AtEnd
@@ -457,7 +463,7 @@ Toast.BackgroundColor3        = PANEL_TINT
 Toast.BackgroundTransparency  = 0.35
 Toast.BorderSizePixel         = 0
 Toast.Font                    = Enum.Font.GothamBold
-Toast.TextSize                = 12
+Toast.TextSize                = 14
 Toast.TextColor3              = T.TextPrimary
 Toast.Text                    = ""
 Toast.TextStrokeColor3        = TEXT_STROKE_COLOR
@@ -535,8 +541,8 @@ KeyInputBox.Position = UDim2.fromOffset(290, 21)
 KeyInputBox.BackgroundColor3 = PANEL_TINT
 KeyInputBox.BackgroundTransparency = 0.35
 KeyInputBox.BorderSizePixel = 0
-KeyInputBox.Font = Enum.Font.GothamMedium
-KeyInputBox.TextSize = 11
+KeyInputBox.Font = Enum.Font.GothamBold
+KeyInputBox.TextSize = 13
 KeyInputBox.TextColor3 = T.TextPrimary
 KeyInputBox.PlaceholderText = "Enter activation key..."
 KeyInputBox.PlaceholderColor3 = T.TextMuted
@@ -564,7 +570,7 @@ ValidateBtnFrame.BackgroundTransparency = 0.12
 ValidateBtnFrame.BorderSizePixel = 0
 ValidateBtnFrame.AutoButtonColor = false
 ValidateBtnFrame.Font = Enum.Font.GothamBold
-ValidateBtnFrame.TextSize = 11
+ValidateBtnFrame.TextSize = 13
 ValidateBtnFrame.TextColor3 = T.TextPrimary
 ValidateBtnFrame.Text = "VALIDATE"
 ValidateBtnFrame.TextStrokeColor3 = TEXT_STROKE_COLOR
@@ -574,6 +580,12 @@ do
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = ValidateBtnFrame
     local s = Instance.new("UIStroke"); s.Color = COLOR_DASH; s.Transparency = 0.35; s.Thickness = 1; s.Parent = ValidateBtnFrame
 end
+ValidateBtnFrame.MouseEnter:Connect(function()
+    TweenSvc:Create(ValidateBtnFrame, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0 }):Play()
+end)
+ValidateBtnFrame.MouseLeave:Connect(function()
+    TweenSvc:Create(ValidateBtnFrame, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.12 }):Play()
+end)
 
 local AuthedView = Panel(licenseWrap, UDim2.new(1, 0, 1, 0))
 AuthedView.Visible = false
@@ -643,7 +655,9 @@ end
 
 local function ShowAuthenticatedState(resolvedScript, expiresAt)
     EntryView.Visible = false
+    AuthedView.Position = UDim2.fromOffset(0, 8)
     AuthedView.Visible = true
+    TweenSvc:Create(AuthedView, TweenInfo.new(0.25, Enum.EasingStyle.Exponential), { Position = UDim2.fromOffset(0, 0) }):Play()
     StartTimer(expiresAt)
 end
 
@@ -695,13 +709,20 @@ dashInfoLink.Size = UDim2.fromOffset(110, 16)
 dashInfoLink.Position = UDim2.fromOffset(14, 74)
 dashInfoLink.BackgroundTransparency = 1
 dashInfoLink.Font = Enum.Font.GothamBold
-dashInfoLink.TextSize = 10
+dashInfoLink.TextSize = 12
 dashInfoLink.TextColor3 = COLOR_INFO
 dashInfoLink.TextXAlignment = Enum.TextXAlignment.Left
 dashInfoLink.Text = "SYSTEM INFO"
+dashInfoLink.TextTransparency = 0.2
 dashInfoLink.AutoButtonColor = false
 dashInfoLink.Parent = dashOverview
 dashInfoLink.MouseButton1Click:Connect(function() Window:_SelectTab(TabInfo) end)
+dashInfoLink.MouseEnter:Connect(function()
+    TweenSvc:Create(dashInfoLink, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { TextTransparency = 0 }):Play()
+end)
+dashInfoLink.MouseLeave:Connect(function()
+    TweenSvc:Create(dashInfoLink, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { TextTransparency = 0.2 }):Play()
+end)
 
 -- ══════════════════════════════════════════════════════════════
 --  SETTINGS TAB — real ThemeManager functionality (dropdown, rainbow
@@ -809,7 +830,7 @@ local function AddInfoRow(place)
     liveTag.BackgroundTransparency = 0.5
     liveTag.BorderSizePixel = 0
     liveTag.Font = Enum.Font.GothamBold
-    liveTag.TextSize = 8
+    liveTag.TextSize = 9
     liveTag.TextColor3 = COLOR_INFO
     liveTag.Text = "LIVE"
     liveTag.TextStrokeColor3 = TEXT_STROKE_COLOR

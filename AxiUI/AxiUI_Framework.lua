@@ -118,11 +118,16 @@ local function AddPad(parent, all, t, b, l, r)
     return p
 end
 
+-- Bumped up (+2 size, promoted to Bold) same as the consumer's own Label()
+-- helper, so every framework-built label (tab names, groupbox headers,
+-- toggle/slider/dropdown rows, notifications) reads bolder/larger too,
+-- applied once here instead of at every call site.
 local function MakeLabel(parent, text, size, color, xAlign, font)
     local l = Instance.new("TextLabel")
     l.Text                  = text or ""
-    l.Font                  = font or Enum.Font.GothamMedium
-    l.TextSize              = size or 11
+    local baseFont = font or Enum.Font.GothamMedium
+    l.Font                  = (baseFont == Enum.Font.Code) and baseFont or Enum.Font.GothamBold
+    l.TextSize              = (size or 11) + 2
     l.TextColor3            = color or T.TextSecondary
     l.BackgroundTransparency = 1
     l.BorderSizePixel       = 0
@@ -326,7 +331,7 @@ local function BuildColourPopup(anchor, initColor, onChange, onClose)
     local hexBox = Instance.new("TextBox")
     hexBox.Size             = UDim2.new(1,-32,1,0)
     hexBox.Font             = Enum.Font.Code
-    hexBox.TextSize         = 10
+    hexBox.TextSize         = 12
     hexBox.TextColor3       = T.TextPrimary
     hexBox.PlaceholderColor3 = T.TextMuted
     hexBox.PlaceholderText  = "RRGGBB"
@@ -670,7 +675,7 @@ function AxiUI:_BuildTitleBar()
     closeBtn.BackgroundTransparency = 1
     closeBtn.AutoButtonColor        = false
     closeBtn.Font                   = Enum.Font.GothamBold
-    closeBtn.TextSize               = 15
+    closeBtn.TextSize               = 17
     closeBtn.TextColor3             = T.TextMuted
     closeBtn.Text                   = "×"
     closeBtn.Parent                 = bar
@@ -862,7 +867,13 @@ function AxiUI:_SelectTab(tab)
     end
     Tween(tab.Button,  { BackgroundTransparency = 1 - 0.10 }, 0.15)
     Tween(tab.NameLbl, { TextColor3 = T.TextPrimary }, 0.15)
+    -- Content used to just snap visible with no transition at all -- a
+    -- small settle-into-place slide (not a fade, ScrollingFrame children
+    -- can't group-fade without a CanvasGroup) on every tab switch, same
+    -- Exponential easing as everything else in this file.
+    tab.Scroll.Position = UDim2.fromOffset(0, 8)
     tab.Scroll.Visible = true
+    Tween(tab.Scroll, { Position = UDim2.fromOffset(0, 0) }, 0.22, Enum.EasingStyle.Exponential)
     self.ActiveTab = tab
 end
 
@@ -1042,8 +1053,8 @@ function Groupbox:AddButton(opts)
     local btn = Instance.new("TextButton")
     btn.Size                  = UDim2.new(1,-16,1,-8)
     btn.Position              = UDim2.fromOffset(8,4)
-    btn.Font                  = Enum.Font.GothamMedium
-    btn.TextSize              = 11
+    btn.Font                  = Enum.Font.GothamBold
+    btn.TextSize              = 13
     btn.TextColor3            = T.TextSecondary
     btn.Text                  = opts.Text or "Button"
     btn.BackgroundColor3      = Color3.fromRGB(255,255,255)
@@ -1237,8 +1248,8 @@ function Groupbox:AddDropdown(key, opts)
         for _, item in ipairs(items) do
             local iBtn = Instance.new("TextButton")
             iBtn.Text                  = tostring(item)
-            iBtn.Font                  = Enum.Font.GothamMedium
-            iBtn.TextSize              = 10
+            iBtn.Font                  = Enum.Font.GothamBold
+            iBtn.TextSize              = 12
             iBtn.TextColor3            = item == AxiUI.Flags[key] and T.AccentStrong or T.TextSecondary
             iBtn.TextXAlignment        = Enum.TextXAlignment.Left
             iBtn.BackgroundTransparency = 1
@@ -1288,8 +1299,8 @@ function Groupbox:AddInput(key, opts)
     box.Position          = UDim2.fromOffset(9,21)
     box.Text              = opts.Default or ""
     box.PlaceholderText   = opts.Placeholder or "..."
-    box.Font              = Enum.Font.GothamMedium
-    box.TextSize          = 10
+    box.Font              = Enum.Font.GothamBold
+    box.TextSize          = 12
     box.TextColor3        = T.TextPrimary
     box.PlaceholderColor3 = T.TextMuted
     box.BackgroundColor3  = Color3.fromRGB(255,255,255)
@@ -1350,8 +1361,8 @@ function Groupbox:AddKeybind(key, opts)
     pill.Size                  = UDim2.fromOffset(54,18)
     pill.AnchorPoint           = Vector2.new(1,0.5)
     pill.Position              = UDim2.new(1,-9,0.5,0)
-    pill.Font                  = Enum.Font.GothamMedium
-    pill.TextSize              = 9
+    pill.Font                  = Enum.Font.GothamBold
+    pill.TextSize              = 11
     pill.TextColor3            = T.Accent
     pill.Text                  = currentKey == Enum.KeyCode.Unknown and "None" or currentKey.Name
     pill.BackgroundColor3      = Color3.fromRGB(52,48,44)
