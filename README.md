@@ -40,14 +40,26 @@ loadstring(game:HttpGet(
      -H "X-Admin-Secret: <secret>" -H "Content-Type: application/json" \
      -d '{"script":"myscript","source":"<lua source as a JSON string>"}'
    ```
-3. Map the PlaceId to that script id:
+3. Map the PlaceId to that script id (optionally with a display name, shown on the Info tab):
    ```bash
    curl -X POST https://finite-log-proxy.asuneteric.workers.dev/api/admin/place/map \
      -H "X-Admin-Secret: <secret>" -H "Content-Type: application/json" \
-     -d '{"placeId":"<PlaceId>","script":"myscript"}'
+     -d '{"placeId":"<PlaceId>","script":"myscript","displayName":"My Game"}'
    ```
 
 Neither step touches this repo. **`UniversalKeyGate.lua` itself never needs to change or be pushed again for a new game** — every game/script addition is purely server-side (an upload + a place mapping). This file only changes if the loader's own behavior changes.
+
+## UI — glassmorphism, four tabs, persistent orb
+
+The window itself is translucent layered panels + a soft diagonal gradient sheen + a light border (`BackgroundTransparency` + `UIGradient` + `UIStroke`) — the standard way "frosted glass" gets done in Roblox UI, since there's no native per-panel background blur (`BlurEffect` only blurs the whole 3D viewport behind *all* UI, not one panel). The default AxiUI title bar's macOS-style traffic-light dots are suppressed (not the intended aesthetic); a custom header sits below the title bar showing a time-of-day greeting ("Good evening, {Name}!", via `DateTime.now():ToLocalTime().Hour`) and the player's Roblox headshot (`Players:GetUserThumbnailAsync`, `Enum.ThumbnailType.HeadShot`).
+
+**Tabs:**
+- **License** — key entry, or once authenticated, a live `HH:MM:SS` countdown to expiry (`"Lifetime access"` for an infinite key) computed from `expiresAt` in the verify response.
+- **Settings** — theme switching/customization via AxiUI's own `ThemeManager:ApplyToTab` (dropdown, rainbow accent, save/load custom), including a registered `"Glass"` theme.
+- **Performance** — live FPS (`Stats.FrameTime`), ping (`Player:GetNetworkPing()`), memory (`Stats:GetTotalMemoryUsageMb()`), refreshed every second. All three are official Roblox engine APIs, not hand-rolled measurements.
+- **Info** — every game currently in the library, fetched live from the Worker's public `GET /api/places/list` (no admin secret needed). Never a hardcoded list — an empty or single-entry result is shown exactly as the Worker reports it, with a manual Refresh button.
+
+**Lifecycle:** on a valid key (fresh entry or a still-valid cached one from a prior run in *this* game — cached per-PlaceId, see `TrySilentLoad`), the License tab switches to the Authenticated/timer view, the script loads in the background, and the window closes itself with an animation — leaving a small draggable orb that reopens it later, straight into the Authenticated view (the key field is gone once authenticated, not just hidden behind a tab). A cached-key rejoin skips the window entirely — no key-entry UI is ever shown, not even briefly during the verify round-trip. A *different* game always prompts fresh, even with a valid cached key from elsewhere.
 
 ## Status
 
