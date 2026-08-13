@@ -12,17 +12,21 @@
     — this file only builds the UI around it. No local HTTP bridge, no
     local JSON handling, no local validity decision.
 
-    Visual layout is a faithful port of the approved Superdesign draft
-    (project a5fec5c4-e974-4aa2-bd8d-b515445af6bc, draft
+    Visual layout is adapted from the approved Superdesign draft (project
+    a5fec5c4-e974-4aa2-bd8d-b515445af6bc, draft
     3b670ab9-0f77-4b59-b00f-18d2bd4e7078, "Optimized Compact Dashboard UI"):
-    near-black glass window, per-tab colored badges (not one shared accent),
-    a Dashboard landing tab built from clickable status cards, a License tab
-    with two mutually-exclusive states (never both at once), Performance as
-    icon-rows, and a live Info list with copy-to-clipboard. Adapted, not
-    pixel-copied, where Roblox UI primitives don't have a CSS/Tailwind
-    equivalent (no icon font, so colored circles/letters stand in for
-    lucide icons; Settings keeps AxiUI's own real ThemeManager functionality
-    rather than the mockup's illustrative, non-functional Save/Reset).
+    near-black glass window, a Dashboard landing tab that also hosts the
+    Authorization Overview (key entry, or once authenticated, a live
+    tier/expiry readout -- two mutually-exclusive states, never both at
+    once), Performance as icon-rows, and a live Info list with
+    copy-to-clipboard. There is no separate License tab -- consolidating
+    onto Dashboard keeps the sidebar to functional categories only and
+    removes any chance of it highlighting a tab that doesn't match what's
+    on screen. Adapted, not pixel-copied, where Roblox UI primitives don't
+    have a CSS/Tailwind equivalent (no icon font, so colored circles/
+    letters stand in for lucide icons; Settings keeps AxiUI's own real
+    ThemeManager functionality rather than the mockup's illustrative,
+    non-functional Save/Reset).
 
     AxiUI is a fork (axiui-keygate/AxiUI/, not ScriptB/Universal-Scripts),
     edited directly: macOS dots removed at the source, a native left
@@ -450,113 +454,35 @@ local function ShowToast(msg)
     end)
 end
 
--- Forward-declared: Dashboard's cards (built below) link to License/
--- Performance/Info, all defined later in the file. A click handler
--- closure resolves a free variable lexically at the point it's DEFINED --
--- without this, TabLicense/TabPerf/TabInfo wouldn't exist as locals yet
--- when these closures are created, so they'd silently capture globals
--- (nil) instead of the real tab objects, and clicking those cards would
--- throw inside Window:_SelectTab(nil).
-local TabDashboard, TabLicense, TabSettings, TabPerf, TabInfo
+-- Forward-declared: Dashboard's cards (built below) link to Performance/
+-- Info, defined later in the file. A click handler closure resolves a
+-- free variable lexically at the point it's DEFINED -- without this,
+-- TabPerf/TabInfo wouldn't exist as locals yet when these closures are
+-- created, so they'd silently capture globals (nil) instead of the real
+-- tab objects, and clicking those cards would throw inside
+-- Window:_SelectTab(nil).
+local TabDashboard, TabSettings, TabPerf, TabInfo
 
 -- ══════════════════════════════════════════════════════════════
---  DASHBOARD TAB
+--  DASHBOARD TAB — also houses the Authorization Overview (key entry /
+--  live session + timer) directly, so all session telemetry lives on the
+--  landing view. There is no separate License tab: one fewer sidebar
+--  entry, and no risk of the sidebar highlighting a tab that doesn't
+--  match what's on screen.
 -- ══════════════════════════════════════════════════════════════
 TabDashboard = Window:AddTab("Dashboard")
 
-local dashRow1 = Instance.new("Frame")
-dashRow1.Size = UDim2.new(1, 0, 0, 84)
-dashRow1.BackgroundTransparency = 1
-dashRow1.BorderSizePixel = 0
-dashRow1.Parent = TabDashboard.Scroll
-
-local dashCardW = math.floor((CONTENT_W - 20 - 20 - 10) * 2 / 3)
-local dashCardW2 = (CONTENT_W - 20 - 20 - 10) - dashCardW
-
-local dashLicenseCard = StatCard(dashRow1, {
-    Size = UDim2.fromOffset(dashCardW, 84), Tint = COLOR_LIC,
-    Href = function() Window:_SelectTab(TabLicense) end,
-})
-Label(dashLicenseCard, "SESSION LICENSE", 9, Color3.fromRGB(
-    math.floor(COLOR_LIC.R*255*0.7), math.floor(COLOR_LIC.G*255*0.7), math.floor(COLOR_LIC.B*255*0.7)),
-    UDim2.fromOffset(12, 10), UDim2.new(1, -24, 0, 12), Enum.Font.GothamBold)
-local dashStatusDot = Instance.new("Frame")
-dashStatusDot.Size = UDim2.fromOffset(8, 8)
-dashStatusDot.Position = UDim2.fromOffset(12, 32)
-dashStatusDot.BackgroundColor3 = COLOR_BAD
-dashStatusDot.BorderSizePixel = 0
-dashStatusDot.Parent = dashLicenseCard
-do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = dashStatusDot end
-local dashStatusLbl = Label(dashLicenseCard, "Enter a key", 13, T.TextPrimary,
-    UDim2.fromOffset(26, 26), UDim2.new(1, -38, 0, 18), Enum.Font.GothamBold)
-local dashKeyHintLbl = Label(dashLicenseCard, "", 8, T.TextMuted,
-    UDim2.fromOffset(12, 50), UDim2.new(1, -24, 0, 12), Enum.Font.Code)
-
-local dashFpsCard = StatCard(dashRow1, {
-    Size = UDim2.fromOffset(dashCardW2, 84), Position = UDim2.fromOffset(dashCardW + 10, 0),
-    Href = function() Window:_SelectTab(TabPerf) end,
-})
-Label(dashFpsCard, "FPS RATE", 8, T.TextMuted, UDim2.fromOffset(0, 10), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-local dashFpsValue = Label(dashFpsCard, "--", 16, T.TextPrimary, UDim2.fromOffset(0, 26), UDim2.new(1,0,0,20), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-Label(dashFpsCard, "LIVE", 8, COLOR_PERF, UDim2.fromOffset(0, 50), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-
-local dashRow2 = Instance.new("Frame")
-dashRow2.Size = UDim2.new(1, 0, 0, 60)
-dashRow2.BackgroundTransparency = 1
-dashRow2.BorderSizePixel = 0
-dashRow2.Parent = TabDashboard.Scroll
-
-local dashHalfW = math.floor((CONTENT_W - 20 - 10) / 2)
-local dashGameCard = StatCard(dashRow2, { Size = UDim2.fromOffset(dashHalfW, 60), Href = function() Window:_SelectTab(TabInfo) end })
-AddIconSquare(dashGameCard, COLOR_DASH, "G", 32, UDim2.fromOffset(12, 14))
-Label(dashGameCard, "RESOLVED GAME", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
-local dashGameValue = Label(dashGameCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
-
-local dashPerfCard = StatCard(dashRow2, { Size = UDim2.fromOffset(dashHalfW, 60), Position = UDim2.fromOffset(dashHalfW + 10, 0), Href = function() Window:_SelectTab(TabPerf) end })
-AddIconSquare(dashPerfCard, COLOR_PERF, "P", 32, UDim2.fromOffset(12, 14))
-Label(dashPerfCard, "PERFORMANCE", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
-local dashPerfValue = Label(dashPerfCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
-
-local dashOverview = Panel(TabDashboard.Scroll, UDim2.new(1, 0, 0, 100))
-Label(dashOverview, "Quick Overview", 12, T.TextSecondary, UDim2.fromOffset(14, 12), UDim2.new(1, -28, 0, 16), Enum.Font.GothamBold)
-Label(dashOverview, "Enter a key on the License tab to unlock the loaded script. Live performance and the full game library are in the sidebar.",
-    10, T.TextMuted, UDim2.fromOffset(14, 32), UDim2.new(1, -28, 0, 34))
-local dashLicLink = Instance.new("TextButton")
-dashLicLink.Size = UDim2.fromOffset(130, 16)
-dashLicLink.Position = UDim2.fromOffset(14, 74)
-dashLicLink.BackgroundTransparency = 1
-dashLicLink.Font = Enum.Font.GothamBold
-dashLicLink.TextSize = 10
-dashLicLink.TextColor3 = COLOR_DASH
-dashLicLink.TextXAlignment = Enum.TextXAlignment.Left
-dashLicLink.Text = "MANAGE LICENSE"
-dashLicLink.AutoButtonColor = false
-dashLicLink.Parent = dashOverview
-local dashInfoLink = Instance.new("TextButton")
-dashInfoLink.Size = UDim2.fromOffset(110, 16)
-dashInfoLink.Position = UDim2.fromOffset(150, 74)
-dashInfoLink.BackgroundTransparency = 1
-dashInfoLink.Font = Enum.Font.GothamBold
-dashInfoLink.TextSize = 10
-dashInfoLink.TextColor3 = COLOR_INFO
-dashInfoLink.TextXAlignment = Enum.TextXAlignment.Left
-dashInfoLink.Text = "SYSTEM INFO"
-dashInfoLink.AutoButtonColor = false
-dashInfoLink.Parent = dashOverview
-
--- ══════════════════════════════════════════════════════════════
---  LICENSE TAB — two states: key entry, or authenticated + live expiry.
---  Never both visible at once.
--- ══════════════════════════════════════════════════════════════
-TabLicense = Window:AddTab("License")
-dashLicLink.MouseButton1Click:Connect(function() Window:_SelectTab(TabLicense) end)
-dashInfoLink.MouseButton1Click:Connect(function() Window:_SelectTab(TabInfo) end)
+-- Forward-declared: ShowAuthenticatedState (built below, as part of the
+-- Authorization Overview) updates the "RESOLVED GAME" stat card, which
+-- isn't built until after it -- same forward-reference closure hazard as
+-- the Perf/Info tab links above, same fix.
+local dashGameValue
 
 local licenseWrap = Instance.new("Frame")
-licenseWrap.Size = UDim2.new(1, 0, 1, 0)
+licenseWrap.Size = UDim2.new(1, 0, 0, 260)
 licenseWrap.BackgroundTransparency = 1
 licenseWrap.BorderSizePixel = 0
-licenseWrap.Parent = TabLicense.Scroll
+licenseWrap.Parent = TabDashboard.Scroll
 
 local LIC_CARD_W = 300
 
@@ -630,6 +556,20 @@ AuthedView.Parent = licenseWrap
 Label(AuthedView, "TIME REMAINING", 8, T.TextMuted, UDim2.fromOffset(0, 0), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
 local AuthedTimerLabel = Label(AuthedView, "", 22, T.TextPrimary, UDim2.fromOffset(0, 12), UDim2.new(1,0,0,30), Enum.Font.Code, Enum.TextXAlignment.Center)
 
+-- Authorization tier pill -- this system is single-tier today, so the
+-- label is a constant, not fetched data; still surfaced explicitly so the
+-- authenticated view always shows what level of access is active.
+local tierPill = Instance.new("Frame")
+tierPill.Size = UDim2.fromOffset(56, 18)
+tierPill.Position = UDim2.fromOffset(LIC_CARD_W - 16 - 56, 2)
+tierPill.BackgroundColor3 = DarkTint(COLOR_LIC)
+tierPill.BackgroundTransparency = 0.35
+tierPill.BorderSizePixel = 0
+tierPill.Parent = AuthedView
+do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = tierPill end
+do local s = Instance.new("UIStroke"); s.Color = COLOR_LIC; s.Transparency = 0.5; s.Thickness = 1; s.Parent = tierPill end
+Label(tierPill, "BASIC", 8, COLOR_LIC, UDim2.fromOffset(0,0), UDim2.new(1,0,1,0), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+
 local DetailsCard = Panel(AuthedView, UDim2.new(1, 0, 0, 110), UDim2.fromOffset(0, 54))
 local AuthedStatusLabel = Label(DetailsCard, "Session Details", 11, COLOR_LIC, UDim2.fromOffset(14, 12), UDim2.new(1,-28,0,16), Enum.Font.GothamBold)
 Label(DetailsCard, "SCRIPT TARGET", 8, T.TextMuted, UDim2.fromOffset(14, 36), UDim2.new(0.5,-14,0,12), Enum.Font.GothamBold)
@@ -652,8 +592,10 @@ local function StopTimer()
     end
 end
 
+-- Converts raw remaining milliseconds into HH:MM:SS, flipping to
+-- "EXPIRED" once the deadline has passed.
 local function FormatRemaining(msRemaining)
-    if msRemaining <= 0 then return "Expired" end
+    if msRemaining <= 0 then return "EXPIRED" end
     local totalSeconds = math.floor(msRemaining / 1000)
     local h = math.floor(totalSeconds / 3600)
     local m = math.floor((totalSeconds % 3600) / 60)
@@ -661,6 +603,9 @@ local function FormatRemaining(msRemaining)
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
+-- Lightweight background loop: recomputes remaining = expiresAt - now
+-- every second and refreshes the label, rather than counting down a
+-- locally-cached duration (which would drift/desync from the server).
 local function StartTimer(expiresAt)
     StopTimer()
     if expiresAt == nil then
@@ -682,11 +627,56 @@ local function ShowAuthenticatedState(resolvedScript, expiresAt)
     AuthedView.Visible = true
     AuthedScriptValue.Text = resolvedScript or "unknown"
     StartTimer(expiresAt)
-    dashStatusDot.BackgroundColor3 = COLOR_LIC
-    dashStatusLbl.Text = "Authenticated"
-    dashKeyHintLbl.Text = resolvedScript and ("Script: " .. resolvedScript) or ""
     dashGameValue.Text = resolvedScript or tostring(PlaceId)
 end
+
+local dashRow1 = Instance.new("Frame")
+dashRow1.Size = UDim2.new(1, 0, 0, 84)
+dashRow1.BackgroundTransparency = 1
+dashRow1.BorderSizePixel = 0
+dashRow1.Parent = TabDashboard.Scroll
+
+local dashFpsCard = StatCard(dashRow1, {
+    Size = UDim2.new(1, 0, 0, 84),
+    Href = function() Window:_SelectTab(TabPerf) end,
+})
+Label(dashFpsCard, "FPS RATE", 8, T.TextMuted, UDim2.fromOffset(0, 10), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+local dashFpsValue = Label(dashFpsCard, "--", 16, T.TextPrimary, UDim2.fromOffset(0, 26), UDim2.new(1,0,0,20), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+Label(dashFpsCard, "LIVE", 8, COLOR_PERF, UDim2.fromOffset(0, 50), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+
+local dashRow2 = Instance.new("Frame")
+dashRow2.Size = UDim2.new(1, 0, 0, 60)
+dashRow2.BackgroundTransparency = 1
+dashRow2.BorderSizePixel = 0
+dashRow2.Parent = TabDashboard.Scroll
+
+local dashHalfW = math.floor((CONTENT_W - 20 - 10) / 2)
+local dashGameCard = StatCard(dashRow2, { Size = UDim2.fromOffset(dashHalfW, 60), Href = function() Window:_SelectTab(TabInfo) end })
+AddIconSquare(dashGameCard, COLOR_DASH, "G", 32, UDim2.fromOffset(12, 14))
+Label(dashGameCard, "RESOLVED GAME", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+dashGameValue = Label(dashGameCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
+
+local dashPerfCard = StatCard(dashRow2, { Size = UDim2.fromOffset(dashHalfW, 60), Position = UDim2.fromOffset(dashHalfW + 10, 0), Href = function() Window:_SelectTab(TabPerf) end })
+AddIconSquare(dashPerfCard, COLOR_PERF, "P", 32, UDim2.fromOffset(12, 14))
+Label(dashPerfCard, "PERFORMANCE", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+local dashPerfValue = Label(dashPerfCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
+
+local dashOverview = Panel(TabDashboard.Scroll, UDim2.new(1, 0, 0, 100))
+Label(dashOverview, "Quick Overview", 12, T.TextSecondary, UDim2.fromOffset(14, 12), UDim2.new(1, -28, 0, 16), Enum.Font.GothamBold)
+Label(dashOverview, "Your key and session status are above. Live performance and the full game library are in the sidebar.",
+    10, T.TextMuted, UDim2.fromOffset(14, 32), UDim2.new(1, -28, 0, 34))
+local dashInfoLink = Instance.new("TextButton")
+dashInfoLink.Size = UDim2.fromOffset(110, 16)
+dashInfoLink.Position = UDim2.fromOffset(14, 74)
+dashInfoLink.BackgroundTransparency = 1
+dashInfoLink.Font = Enum.Font.GothamBold
+dashInfoLink.TextSize = 10
+dashInfoLink.TextColor3 = COLOR_INFO
+dashInfoLink.TextXAlignment = Enum.TextXAlignment.Left
+dashInfoLink.Text = "SYSTEM INFO"
+dashInfoLink.AutoButtonColor = false
+dashInfoLink.Parent = dashOverview
+dashInfoLink.MouseButton1Click:Connect(function() Window:_SelectTab(TabInfo) end)
 
 -- ══════════════════════════════════════════════════════════════
 --  SETTINGS TAB — real ThemeManager functionality (dropdown, rainbow
@@ -1019,8 +1009,6 @@ local function SubmitKey()
         ValidateBtnFrame.Text = "VALIDATE LICENSE"
         StatusLabel.Text = reason or "Invalid key — try again."
         StatusLabel.TextColor3 = COLOR_BAD
-        dashStatusDot.BackgroundColor3 = COLOR_BAD
-        dashStatusLbl.Text = "Invalid key"
         Shake(Window.Frame)
     end
 end
