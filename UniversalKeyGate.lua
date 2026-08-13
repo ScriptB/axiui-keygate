@@ -90,20 +90,25 @@ local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.l
 
 -- Structural glass properties -- NOT part of ThemeManager's swappable key
 -- set (it only swaps WindowBg/Accent/AccentStrong/Text*), these are the
--- fixed "this is a glass panel" look: heavy transparency, a light border,
--- tight corners. Any theme picked in Settings still layers on top of this.
+-- fixed "this is a glass panel" look: translucent, not invisible, plus a
+-- light border. Roblox has no real background blur to lean on the way CSS
+-- glassmorphism does, so panels need noticeably MORE opacity than a typical
+-- blur-backed glass example to actually stay legible -- the first pass here
+-- used ~5% opacity (GroupboxBgAlpha/ElementBgAlpha), which read as "can
+-- barely see it" exactly because there's no blurred backdrop to give it any
+-- visual structure at that level. Raised substantially.
 AxiUI:SetTheme({
-    GroupboxBg      = Color3.fromRGB(255, 255, 255),  GroupboxBgAlpha = 0.055,
-    ElementBg       = Color3.fromRGB(255, 255, 255),  ElementBgAlpha  = 0.045,
-    Border          = Color3.fromRGB(255, 255, 255),  BorderAlpha     = 0.14,
+    GroupboxBg      = Color3.fromRGB(255, 255, 255),  GroupboxBgAlpha = 0.35,
+    ElementBg       = Color3.fromRGB(255, 255, 255),  ElementBgAlpha  = 0.26,
+    Border          = Color3.fromRGB(255, 255, 255),  BorderAlpha     = 0.22,
 })
 
 -- Registered as a selectable theme (not just AxiUI:SetTheme'd directly) so
 -- it shows up in the Settings tab's theme dropdown alongside the built-ins,
 -- and switching away from it and back still works correctly.
 ThemeManager:AddTheme("Glass", {
-    WindowBg      = Color3.fromRGB(20,  24,  32),   WindowBgAlpha  = 0.70,
-    Accent        = Color3.fromRGB(150, 178, 205),  AccentAlpha    = 0.30,
+    WindowBg      = Color3.fromRGB(20,  24,  32),   WindowBgAlpha  = 0.80,
+    Accent        = Color3.fromRGB(150, 178, 205),  AccentAlpha    = 0.32,
     AccentStrong  = Color3.fromRGB(200, 220, 238),
     TextPrimary   = Color3.fromRGB(240, 244, 248),
     TextSecondary = Color3.fromRGB(172, 183, 197),
@@ -116,9 +121,11 @@ local T = AxiUI.Theme
 -- ══════════════════════════════════════════════════════════════
 --  WINDOW
 -- ══════════════════════════════════════════════════════════════
-local WIDTH      = 460
-local BASE_HEIGHT = 520   -- content height AxiUI lays out under its own title(34)+tabrow(30) formula
-local HEADER_H    = 64    -- extra row inserted below the title bar for greeting + avatar
+local SIDEBAR_W    = 100  -- left tab rail, replacing AxiUI's default horizontal top tab row
+local CONTENT_W    = 460  -- desired width for the actual tab content, unrelated to the sidebar
+local WIDTH         = CONTENT_W + SIDEBAR_W
+local BASE_HEIGHT  = 520  -- content height AxiUI lays out under its own title(34)+tabrow(30) formula
+local HEADER_H      = 64  -- extra row inserted below the title bar for greeting + avatar
 
 local Window = AxiUI:CreateWindow({
     Title  = "Access",
@@ -159,29 +166,119 @@ end
 
 -- Suppress the macOS-style traffic-light dots the default title bar always
 -- adds (no exposed option to disable them at CreateWindow) -- explicitly
--- not the aesthetic asked for. They're the only Frame child of TitleBar
--- with exactly 3 children (the 3 dots); nothing else in the title bar
--- matches that shape, so this is a safe, specific heuristic rather than a
--- fragile positional guess.
+-- not the aesthetic asked for. A first attempt matched on "the Frame with
+-- exactly 3 children" and silently never fired: AddList() (used to lay the
+-- 3 dots out horizontally) parents a UIListLayout into that same container,
+-- so it actually has 4 children, not 3 -- the heuristic never matched
+-- anything. Matching on the dot row's own hardcoded Size/Position instead
+-- (read directly from AxiUI's source) is exact, not a child-count guess.
 for _, child in ipairs(Window.TitleBar:GetChildren()) do
-    if child:IsA("Frame") and #child:GetChildren() == 3 then
+    if child:IsA("Frame")
+        and child.Size == UDim2.fromOffset(46, 10)
+        and child.Position == UDim2.fromOffset(10, 12)
+    then
         child.Visible = false
     end
 end
 
--- Reposition the tab row / its divider / the content area down by
--- HEADER_H to make room for the custom header between the title bar and
--- the tabs. TabRow and ContentArea are both exposed on the window object;
--- the tab row's bottom divider is named "TabRowDivider" specifically so it
--- can be found and moved the same way (everything else inside TabRow is
--- unnamed/positional and left alone).
-Window.TabRow.Position = UDim2.fromOffset(0, 34 + HEADER_H)
+-- AxiUI's built-in tab row is a horizontal strip across the top -- hidden
+-- entirely in favor of a custom LEFT sidebar built below. Its individual
+-- tab buttons/underlines still exist and still work (Window:AddTab still
+-- creates them), they're just never shown; the sidebar drives the exact
+-- same Window:_SelectTab(tab) switching logic instead of relying on those
+-- hidden buttons' own click handlers.
+Window.TabRow.Visible = false
 local tabRowDivider = Window.Frame:FindFirstChild("TabRowDivider")
-if tabRowDivider then
-    tabRowDivider.Position = UDim2.new(0, 0, 0, 34 + HEADER_H + 30 - 1)
+if tabRowDivider then tabRowDivider.Visible = false end
+
+-- Content area now sits to the RIGHT of the sidebar, below the header --
+-- no tab-row height to reserve any more since tabs aren't below the header,
+-- they're beside the content.
+Window.ContentArea.Position = UDim2.fromOffset(SIDEBAR_W, 34 + HEADER_H)
+Window.ContentArea.Size     = UDim2.new(1, -SIDEBAR_W, 1, -(34 + HEADER_H))
+
+-- ══════════════════════════════════════════════════════════════
+--  LEFT SIDEBAR — custom vertical tab rail. AxiUI's own tab row is a fixed
+--  horizontal FillDirection baked in at creation, not something that can
+--  just be resized into a vertical layout -- so this is a genuinely
+--  separate, independent nav strip that drives AxiUI's existing tab-switch
+--  state (Window.ActiveTab / Window:_SelectTab) rather than replacing it.
+-- ══════════════════════════════════════════════════════════════
+local Sidebar = Instance.new("Frame")
+Sidebar.Name                   = "Sidebar"
+Sidebar.Size                   = UDim2.new(0, SIDEBAR_W, 1, -(34 + HEADER_H))
+Sidebar.Position               = UDim2.fromOffset(0, 34 + HEADER_H)
+Sidebar.BackgroundColor3       = T.GroupboxBg
+Sidebar.BackgroundTransparency = 1 - T.GroupboxBgAlpha
+Sidebar.BorderSizePixel        = 0
+Sidebar.Parent                 = Window.Frame
+
+local sidebarDiv = Instance.new("Frame")
+sidebarDiv.Size                   = UDim2.new(0, 1, 1, 0)
+sidebarDiv.Position               = UDim2.new(1, -1, 0, 0)
+sidebarDiv.BackgroundColor3       = T.Border
+sidebarDiv.BackgroundTransparency = 1 - T.BorderAlpha
+sidebarDiv.BorderSizePixel        = 0
+sidebarDiv.Parent                 = Sidebar
+
+local sidebarList = Instance.new("UIListLayout")
+sidebarList.Padding   = UDim.new(0, 4)
+sidebarList.SortOrder = Enum.SortOrder.LayoutOrder
+sidebarList.Parent    = Sidebar
+
+local sidebarPad = Instance.new("UIPadding")
+sidebarPad.PaddingTop    = UDim.new(0, 10)
+sidebarPad.PaddingLeft   = UDim.new(0, 8)
+sidebarPad.PaddingRight  = UDim.new(0, 8)
+sidebarPad.Parent        = Sidebar
+
+local sidebarEntries = {}
+
+-- Wraps Window:AddTab -- creates the tab (and its hidden top-row button)
+-- exactly as before, plus a matching sidebar button that calls the same
+-- Window:_SelectTab(tab) the hidden button would have.
+local function AddSidebarTab(name)
+    local tab = Window:AddTab(name)
+
+    local btn = Instance.new("TextButton")
+    btn.Size                   = UDim2.new(1, 0, 0, 34)
+    btn.BackgroundColor3       = T.ElementBg
+    btn.BackgroundTransparency = 1
+    btn.Text                   = name
+    btn.Font                   = Enum.Font.GothamMedium
+    btn.TextSize               = 12
+    btn.TextColor3             = T.TextMuted
+    btn.AutoButtonColor        = false
+    btn.BorderSizePixel        = 0
+    btn.Parent                 = Sidebar
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = btn
+
+    local entry = { Tab = tab, Button = btn }
+
+    local function Refresh()
+        local active = Window.ActiveTab == tab
+        TweenSvc:Create(btn, TweenInfo.new(0.12), {
+            BackgroundTransparency = active and (1 - T.AccentAlpha) or 1,
+            TextColor3             = active and T.TextPrimary or T.TextMuted,
+        }):Play()
+    end
+    entry.Refresh = Refresh
+
+    btn.MouseButton1Click:Connect(function()
+        Window:_SelectTab(tab)
+        for _, e in ipairs(sidebarEntries) do e.Refresh() end
+    end)
+    btn.MouseEnter:Connect(function()
+        if Window.ActiveTab ~= tab then
+            TweenSvc:Create(btn, TweenInfo.new(0.1), { BackgroundTransparency = 1 - 0.08 }):Play()
+        end
+    end)
+    btn.MouseLeave:Connect(Refresh)
+
+    table.insert(sidebarEntries, entry)
+    Refresh()
+    return tab
 end
-Window.ContentArea.Position = UDim2.fromOffset(0, 34 + HEADER_H + 30)
-Window.ContentArea.Size     = UDim2.new(1, 0, 1, -(34 + HEADER_H + 30))
 
 -- ══════════════════════════════════════════════════════════════
 --  CUSTOM HEADER — avatar + time-of-day greeting
@@ -275,7 +372,7 @@ SubLbl.Parent                 = HeaderRow
 -- ══════════════════════════════════════════════════════════════
 --  LICENSE TAB — two states: key entry, or authenticated + live expiry
 -- ══════════════════════════════════════════════════════════════
-local TabLicense = Window:AddTab("License")
+local TabLicense = AddSidebarTab("License")
 
 local EntryBox = TabLicense:AddGroupbox("Authentication")
 local StatusLabel = EntryBox:AddLabel(
@@ -349,13 +446,13 @@ end
 --  SETTINGS TAB — theme management comes almost entirely from AxiUI's own
 --  ThemeManager (dropdown, rainbow accent, save/load custom).
 -- ══════════════════════════════════════════════════════════════
-local TabSettings = Window:AddTab("Settings")
+local TabSettings = AddSidebarTab("Settings")
 ThemeManager:ApplyToTab(TabSettings)
 
 -- ══════════════════════════════════════════════════════════════
 --  PERFORMANCE TAB — live FPS / ping / memory
 -- ══════════════════════════════════════════════════════════════
-local TabPerf = Window:AddTab("Performance")
+local TabPerf = AddSidebarTab("Performance")
 local BoxPerf = TabPerf:AddGroupbox("Live Stats")
 local FpsLabel    = BoxPerf:AddLabel("FPS: --",    { Color = T.TextSecondary })
 local PingLabel   = BoxPerf:AddLabel("Ping: --",   { Color = T.TextSecondary })
@@ -386,7 +483,7 @@ end)
 -- ══════════════════════════════════════════════════════════════
 --  INFO TAB — live from the Worker, never a hardcoded/phantom list.
 -- ══════════════════════════════════════════════════════════════
-local TabInfo = Window:AddTab("Info")
+local TabInfo = AddSidebarTab("Info")
 local BoxInfo = TabInfo:AddGroupbox("Supported Games")
 local InfoStatusLabel = BoxInfo:AddLabel("Loading…", { Color = T.TextMuted })
 local infoEntryLabels = {}

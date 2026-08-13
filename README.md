@@ -49,9 +49,13 @@ loadstring(game:HttpGet(
 
 Neither step touches this repo. **`UniversalKeyGate.lua` itself never needs to change or be pushed again for a new game** — every game/script addition is purely server-side (an upload + a place mapping). This file only changes if the loader's own behavior changes.
 
-## UI — glassmorphism, four tabs, persistent orb
+## UI — glassmorphism, left-sidebar tabs, four tabs, persistent orb
 
-The window itself is translucent layered panels + a soft diagonal gradient sheen + a light border (`BackgroundTransparency` + `UIGradient` + `UIStroke`) — the standard way "frosted glass" gets done in Roblox UI, since there's no native per-panel background blur (`BlurEffect` only blurs the whole 3D viewport behind *all* UI, not one panel). The default AxiUI title bar's macOS-style traffic-light dots are suppressed (not the intended aesthetic); a custom header sits below the title bar showing a time-of-day greeting ("Good evening, {Name}!", via `DateTime.now():ToLocalTime().Hour`) and the player's Roblox headshot (`Players:GetUserThumbnailAsync`, `Enum.ThumbnailType.HeadShot`).
+The window itself is translucent layered panels + a soft diagonal gradient sheen + a light border (`BackgroundTransparency` + `UIGradient` + `UIStroke`) — the standard way "frosted glass" gets done in Roblox UI, since there's no native per-panel background blur (`BlurEffect` only blurs the whole 3D viewport behind *all* UI, not one panel). Panel opacity (`GroupboxBgAlpha`/`ElementBgAlpha`) is calibrated well above what a typical CSS glassmorphism example uses (~35%/26%, not ~5%) — with no real blur behind it to lean on for visual structure, low-opacity panels just read as invisible in Roblox rather than "glassy."
+
+The default AxiUI title bar's macOS-style traffic-light dots are suppressed — matched on their exact hardcoded `Size`/`Position` from AxiUI's own source, not a child-count heuristic (a first attempt at that heuristic silently never fired, since `AddList()` parents an extra `UIListLayout` into that same container, making it 4 children, not 3). A custom header sits below the title bar showing a time-of-day greeting ("Good evening, {Name}!", via `DateTime.now():ToLocalTime().Hour`) and the player's Roblox headshot (`Players:GetUserThumbnailAsync`, `Enum.ThumbnailType.HeadShot`).
+
+**Tabs live in a left sidebar, not AxiUI's default horizontal top row.** AxiUI's tab row has a fixed horizontal `FillDirection` baked in at creation — not something a resize can turn vertical — so the default row is hidden entirely (`Window.TabRow.Visible = false`) and a genuinely separate sidebar drives the *same* underlying tab-switch state (`Window:_SelectTab(tab)`, `Window.ActiveTab`) instead of replacing it. `AddSidebarTab(name)` wraps `Window:AddTab(name)` and adds the matching sidebar button.
 
 **Tabs:**
 - **License** — key entry, or once authenticated, a live `HH:MM:SS` countdown to expiry (`"Lifetime access"` for an infinite key) computed from `expiresAt` in the verify response.
