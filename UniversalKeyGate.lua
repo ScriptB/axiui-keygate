@@ -191,7 +191,7 @@ end
 -- ══════════════════════════════════════════════════════════════
 --  WINDOW
 -- ══════════════════════════════════════════════════════════════
-local SIDEBAR_W  = 90
+local SIDEBAR_W  = 160
 local CONTENT_W  = 760
 local HEADER_H   = 50
 local WIDTH      = CONTENT_W + SIDEBAR_W
@@ -462,7 +462,7 @@ local TabDashboard, TabLicense, TabSettings, TabPerf, TabInfo
 -- ══════════════════════════════════════════════════════════════
 --  DASHBOARD TAB
 -- ══════════════════════════════════════════════════════════════
-TabDashboard = Window:AddTab("Dash", { Icon = "D", BadgeColor = COLOR_DASH })
+TabDashboard = Window:AddTab("Dashboard")
 
 local dashRow1 = Instance.new("Frame")
 dashRow1.Size = UDim2.new(1, 0, 0, 84)
@@ -548,7 +548,7 @@ dashInfoLink.Parent = dashOverview
 --  LICENSE TAB — two states: key entry, or authenticated + live expiry.
 --  Never both visible at once.
 -- ══════════════════════════════════════════════════════════════
-TabLicense = Window:AddTab("License", { Icon = "L", BadgeColor = COLOR_LIC })
+TabLicense = Window:AddTab("License")
 dashLicLink.MouseButton1Click:Connect(function() Window:_SelectTab(TabLicense) end)
 dashInfoLink.MouseButton1Click:Connect(function() Window:_SelectTab(TabInfo) end)
 
@@ -692,13 +692,13 @@ end
 --  SETTINGS TAB — real ThemeManager functionality (dropdown, rainbow
 --  accent, save/load custom), not the mockup's illustrative buttons.
 -- ══════════════════════════════════════════════════════════════
-TabSettings = Window:AddTab("Settings", { Icon = "S", BadgeColor = COLOR_SET })
+TabSettings = Window:AddTab("Settings")
 ThemeManager:ApplyToTab(TabSettings)
 
 -- ══════════════════════════════════════════════════════════════
 --  PERFORMANCE TAB — icon rows (FPS / Ping / Memory)
 -- ══════════════════════════════════════════════════════════════
-TabPerf = Window:AddTab("Perf", { Icon = "P", BadgeColor = COLOR_PERF })
+TabPerf = Window:AddTab("Performance")
 
 local function PerfRow(color, letter)
     local row = Panel(TabPerf.Scroll, UDim2.new(1, 0, 0, 58))
@@ -739,7 +739,7 @@ end)
 -- ══════════════════════════════════════════════════════════════
 --  INFO TAB — live from the Worker, never a hardcoded/phantom list.
 -- ══════════════════════════════════════════════════════════════
-TabInfo = Window:AddTab("Info", { Icon = "I", BadgeColor = COLOR_INFO })
+TabInfo = Window:AddTab("Info")
 
 Label(TabInfo.Scroll, "Supported Games", 12, T.TextPrimary, UDim2.fromOffset(0,0), UDim2.new(1,0,0,16), Enum.Font.GothamBold)
 

@@ -507,7 +507,7 @@ function AxiUI:CreateWindow(options)
     -- instead of a consumer having to reposition everything by hand after
     -- the fact (the previous, fragile way this was done).
     win.HeaderHeight = options.HeaderHeight or 0
-    win.SidebarWidth = options.SidebarWidth or 110
+    win.SidebarWidth = options.SidebarWidth or 160
 
     local gui = Instance.new("ScreenGui")
     gui.Name           = "AxiUI_" .. win.Title:gsub("%s+","")
@@ -750,11 +750,6 @@ end
 local Tab = {}
 Tab.__index = Tab
 
--- options.Icon: single character shown in a small colored badge to the
--- left of the label. Defaults to the tab name's first letter. A plain
--- letter badge, not a Unicode/emoji glyph or an external icon asset --
--- Roblox TextLabels don't reliably render full emoji, and this needs no
--- icon-sprite dependency.
 function AxiUI:AddTab(name, options)
     options = options or {}
     local tab      = setmetatable({}, Tab)
@@ -763,7 +758,8 @@ function AxiUI:AddTab(name, options)
     tab.Groupboxes = {}
 
     -- Tab button -- full-width row in the vertical sidebar, not an
-    -- auto-width horizontal chip.
+    -- auto-width horizontal chip. No icon badge -- plain text row, so
+    -- the full tab name always has room to sit unabbreviated.
     local btn = Instance.new("TextButton")
     btn.Text                   = ""
     btn.BackgroundColor3       = T.ElementBg
@@ -774,30 +770,10 @@ function AxiUI:AddTab(name, options)
     btn.Parent                 = self.TabRow
     AddCorner(btn, UDim.new(0, 6))
 
-    -- BadgeColor: each tab keeps its own fixed color (not toggled by
-    -- selection state) -- matches the reference design, where only the
-    -- button's own background/label dim with selection, not the badge hue.
-    local badgeColor = options.BadgeColor or T.Accent
-    local badgeAlpha = options.BadgeAlpha or T.AccentAlpha
-
-    local badge = Instance.new("Frame")
-    badge.Size                   = UDim2.fromOffset(22, 22)
-    badge.Position               = UDim2.fromOffset(6, 7)
-    badge.BackgroundColor3       = badgeColor
-    badge.BackgroundTransparency = 1 - badgeAlpha
-    badge.BorderSizePixel        = 0
-    badge.Parent                 = btn
-    AddCorner(badge, UDim.new(1, 0))
-    AddStroke(badge, badgeColor, badgeAlpha + 0.15, 1)
-
-    local badgeLbl = MakeLabel(badge, (options.Icon or name:sub(1,1)):upper(), 11,
-        badgeColor, Enum.TextXAlignment.Center, Enum.Font.GothamBold)
-    badgeLbl.Size = UDim2.new(1,0,1,0)
-
-    local nameLbl = MakeLabel(btn, name, 12, T.TextMuted,
+    local nameLbl = MakeLabel(btn, name, 13, T.TextMuted,
         Enum.TextXAlignment.Left, Enum.Font.GothamMedium)
-    nameLbl.Size     = UDim2.new(1, -40, 1, 0)
-    nameLbl.Position = UDim2.fromOffset(36, 0)
+    nameLbl.Size     = UDim2.new(1, -28, 1, 0)
+    nameLbl.Position = UDim2.fromOffset(14, 0)
 
     -- Scrollable content frame
     local scroll = Instance.new("ScrollingFrame")
@@ -820,7 +796,6 @@ function AxiUI:AddTab(name, options)
 
     tab.Button   = btn
     tab.NameLbl  = nameLbl
-    tab.Badge    = badge
     tab.Scroll   = scroll
 
     btn.MouseButton1Click:Connect(function() self:_SelectTab(tab) end)
