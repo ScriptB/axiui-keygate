@@ -44,7 +44,38 @@ local Players     = game:GetService("Players")
 local TweenSvc     = game:GetService("TweenService")
 local UIS          = game:GetService("UserInputService")
 local StatsSvc     = game:GetService("Stats")
+local Lighting     = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
+
+-- Real background blur (DepthOfFieldEffect), not a fake -- confirmed
+-- against Roblox's own docs: FocusDistance sets where the sharp zone sits
+-- (in studs from camera), InFocusRadius is the buffer around it that stays
+-- sharp, NearIntensity/FarIntensity control blur strength on either side.
+-- A small FocusDistance + tight InFocusRadius + FarIntensity up and
+-- NearIntensity at 0 blurs the game world beyond that near point while
+-- nothing meaningful sits close enough to the camera to trigger near-blur.
+-- Toggled on only while the actual window is open (not just the floating
+-- orb) -- minimized-to-orb shouldn't blur the game the player is trying to
+-- get back to.
+local BlurEffect = Instance.new("DepthOfFieldEffect")
+BlurEffect.Name          = "UniversalKeyGate_Blur"
+BlurEffect.FocusDistance = 2
+BlurEffect.InFocusRadius = 1
+BlurEffect.NearIntensity = 0
+BlurEffect.FarIntensity  = 0.6
+BlurEffect.Enabled       = false
+BlurEffect.Parent        = Lighting
+
+local function SetBlur(on)
+    TweenSvc:Create(BlurEffect, TweenInfo.new(0.35, Enum.EasingStyle.Exponential), {
+        FarIntensity = on and 0.6 or 0,
+    }):Play()
+    if on then
+        BlurEffect.Enabled = true
+    else
+        task.delay(0.35, function() BlurEffect.Enabled = false end)
+    end
+end
 
 -- ══════════════════════════════════════════════════════════════
 --  LOAD KEYAUTH — shared Worker-communication module. Loaded before AxiUI
@@ -144,10 +175,50 @@ do
     Window.Frame.Position    = UDim2.fromOffset(math.floor(vp.X / 2), math.floor(vp.Y / 2))
 end
 
+-- Soft drop shadow -- every well-regarded Roblox UI library (Fluent's
+-- acrylic panels, Rayfield's window/toggles/sliders/notifications) has an
+-- explicit shadow layer under its panels; a flat translucent panel with
+-- zero shadow is a big part of why the first pass read as flat/lack-luster.
+-- Built from stacked, progressively larger/fainter Frames rather than an
+-- external image asset (Rayfield uses a pre-baked shadow PNG uploaded to
+-- its own account -- reusing someone else's specific asset id isn't
+-- something to do casually, and this primitive-only approach gets a
+-- comparable soft-glow result without that dependency). A shadow can't
+-- render behind its own parent in Roblox (children always draw in front of
+-- their parent regardless of ZIndex), so these are siblings of Frame under
+-- Gui with a lower ZIndex, sized to the window's resting size -- they don't
+-- track the brief 0.4-0.5s open/close size tween in real time, which is
+-- not visually meaningful for a soft, indistinct shadow.
+do
+    local shadowLayers = {
+        { pad = 5,  alpha = 0.16 },
+        { pad = 11, alpha = 0.10 },
+        { pad = 19, alpha = 0.06 },
+        { pad = 30, alpha = 0.03 },
+    }
+    for i, layer in ipairs(shadowLayers) do
+        local s = Instance.new("Frame")
+        s.Name                   = "Shadow" .. i
+        s.AnchorPoint             = Vector2.new(0.5, 0.5)
+        s.Position                = Window.Frame.Position + UDim2.fromOffset(0, layer.pad * 0.4)
+        s.Size                   = UDim2.fromOffset(WIDTH + layer.pad * 2, (BASE_HEIGHT + HEADER_H) + layer.pad * 2)
+        s.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
+        s.BackgroundTransparency = 1 - layer.alpha
+        s.BorderSizePixel        = 0
+        s.ZIndex                 = Window.Frame.ZIndex - 1
+        s.Parent                 = Window.Gui
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, 12 + layer.pad * 0.6)
+        c.Parent = s
+    end
+end
+
 -- Subtle diagonal glass sheen -- a soft light streak across the panel,
 -- heavily transparent. This plus the layered BackgroundTransparency +
 -- UIStroke border is the actual "frosted glass" look; there is no true
--- background blur to add on top of it (see file header).
+-- background blur to add on top of it (see file header) -- now paired with
+-- a real one via DepthOfFieldEffect (SetBlur above), toggled while the
+-- window is actually open.
 do
     local sheen = Instance.new("UIGradient")
     sheen.Color = ColorSequence.new({
@@ -237,6 +308,12 @@ local sidebarEntries = {}
 -- Wraps Window:AddTab -- creates the tab (and its hidden top-row button)
 -- exactly as before, plus a matching sidebar button that calls the same
 -- Window:_SelectTab(tab) the hidden button would have.
+-- Letter-badge icon rather than a Unicode/emoji glyph -- Roblox TextLabels
+-- don't reliably render full emoji (no color-emoji font support the way a
+-- modern OS does; many glyphs just show as a missing-character box), and a
+-- plain single letter in a small colored circle is a well-established,
+-- guaranteed-to-render alternative used by plenty of real apps, not a
+-- placeholder. No icon-library dependency/asset id needed either.
 local function AddSidebarTab(name)
     local tab = Window:AddTab(name)
 
@@ -244,22 +321,59 @@ local function AddSidebarTab(name)
     btn.Size                   = UDim2.new(1, 0, 0, 34)
     btn.BackgroundColor3       = T.ElementBg
     btn.BackgroundTransparency = 1
-    btn.Text                   = name
-    btn.Font                   = Enum.Font.GothamMedium
-    btn.TextSize               = 12
-    btn.TextColor3             = T.TextMuted
+    btn.Text                   = ""
     btn.AutoButtonColor        = false
     btn.BorderSizePixel        = 0
     btn.Parent                 = Sidebar
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = btn
 
+    local badge = Instance.new("Frame")
+    badge.Size                   = UDim2.fromOffset(22, 22)
+    badge.Position               = UDim2.fromOffset(6, 6)
+    badge.BackgroundColor3       = T.Accent
+    badge.BackgroundTransparency = 1 - T.AccentAlpha
+    badge.BorderSizePixel        = 0
+    badge.Parent                 = btn
+    local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(1, 0); bc.Parent = badge
+
+    local badgeLbl = Instance.new("TextLabel")
+    badgeLbl.Size                   = UDim2.new(1, 0, 1, 0)
+    badgeLbl.BackgroundTransparency = 1
+    badgeLbl.Font                   = Enum.Font.GothamBold
+    badgeLbl.TextSize               = 11
+    badgeLbl.TextColor3             = T.TextPrimary
+    badgeLbl.Text                   = name:sub(1, 1):upper()
+    badgeLbl.Parent                 = badge
+
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Size                   = UDim2.new(1, -40, 1, 0)
+    nameLbl.Position               = UDim2.fromOffset(36, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Font                   = Enum.Font.GothamMedium
+    nameLbl.TextSize               = 12
+    nameLbl.TextColor3             = T.TextMuted
+    nameLbl.TextXAlignment         = Enum.TextXAlignment.Left
+    nameLbl.Text                   = name
+    nameLbl.Parent                 = btn
+
     local entry = { Tab = tab, Button = btn }
+
+    -- Hover/select feedback stays quick (instant feedback still matters),
+    -- but Exponential instead of the default Quad reads noticeably smoother
+    -- for the same duration -- small but real, same curve as the macro
+    -- transitions below just compressed into a much shorter window.
+    local HOVER_TWEEN = TweenInfo.new(0.15, Enum.EasingStyle.Exponential)
 
     local function Refresh()
         local active = Window.ActiveTab == tab
-        TweenSvc:Create(btn, TweenInfo.new(0.12), {
+        TweenSvc:Create(btn, HOVER_TWEEN, {
             BackgroundTransparency = active and (1 - T.AccentAlpha) or 1,
-            TextColor3             = active and T.TextPrimary or T.TextMuted,
+        }):Play()
+        TweenSvc:Create(nameLbl, HOVER_TWEEN, {
+            TextColor3 = active and T.TextPrimary or T.TextMuted,
+        }):Play()
+        TweenSvc:Create(badge, HOVER_TWEEN, {
+            BackgroundTransparency = active and (1 - T.AccentAlpha) or (1 - T.AccentAlpha - 0.15),
         }):Play()
     end
     entry.Refresh = Refresh
@@ -270,7 +384,7 @@ local function AddSidebarTab(name)
     end)
     btn.MouseEnter:Connect(function()
         if Window.ActiveTab ~= tab then
-            TweenSvc:Create(btn, TweenInfo.new(0.1), { BackgroundTransparency = 1 - 0.08 }):Play()
+            TweenSvc:Create(btn, HOVER_TWEEN, { BackgroundTransparency = 1 - 0.08 }):Play()
         end
     end)
     btn.MouseLeave:Connect(Refresh)
@@ -571,10 +685,10 @@ local function BuildReopenOrb()
     dc.Parent = dot
 
     orb.MouseEnter:Connect(function()
-        TweenSvc:Create(orb, TweenInfo.new(0.12), { BackgroundTransparency = 1 - T.WindowBgAlpha - 0.1 }):Play()
+        TweenSvc:Create(orb, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 1 - T.WindowBgAlpha - 0.1 }):Play()
     end)
     orb.MouseLeave:Connect(function()
-        TweenSvc:Create(orb, TweenInfo.new(0.12), { BackgroundTransparency = 1 - T.WindowBgAlpha }):Play()
+        TweenSvc:Create(orb, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 1 - T.WindowBgAlpha }):Play()
     end)
 
     -- Draggable, same technique AxiUI's own window uses internally (that
@@ -621,35 +735,45 @@ local function BuildReopenOrb()
     return orb
 end
 
+-- Macro transitions (window open/close, tab switch) use Exponential easing
+-- at ~0.45-0.55s -- confirmed against Rayfield's own source, which is
+-- overwhelmingly Exponential-eased at 0.4-0.7s for exactly these kinds of
+-- transitions. The short Sine/Quart/Back tweens used here originally
+-- (0.1-0.35s) read as an abrupt snap by comparison -- slower and smoother
+-- is what actually reads as "premium," not faster.
+local OPEN_CLOSE_TWEEN = TweenInfo.new(0.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+
 ReopenWindow = function()
     if not ReopenOrb then return end
     local vp = workspace.CurrentCamera.ViewportSize
     Window.Frame.Visible = true
-    Window.Frame.Size = UDim2.fromOffset(WIDTH * 0.85, (BASE_HEIGHT + HEADER_H) * 0.85)
+    Window.Frame.Size = UDim2.fromOffset(WIDTH * 0.9, (BASE_HEIGHT + HEADER_H) * 0.9)
     Window.Frame.BackgroundTransparency = 1
     Window.Frame.Position = UDim2.fromOffset(math.floor(vp.X / 2), math.floor(vp.Y / 2))
-    TweenSvc:Create(Window.Frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    SetBlur(true)
+    TweenSvc:Create(Window.Frame, OPEN_CLOSE_TWEEN, {
         Size = UDim2.fromOffset(WIDTH, BASE_HEIGHT + HEADER_H),
         BackgroundTransparency = 1 - T.WindowBgAlpha,
     }):Play()
-    TweenSvc:Create(ReopenOrb, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
-    task.delay(0.2, function() ReopenOrb.Visible = false end)
+    TweenSvc:Create(ReopenOrb, TweenInfo.new(0.3, Enum.EasingStyle.Exponential), { BackgroundTransparency = 1 }):Play()
+    task.delay(0.3, function() ReopenOrb.Visible = false end)
 end
 
 local function CloseToOrb()
     BuildReopenOrb()
     local frame = Window.Frame
-    TweenSvc:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-        Size = UDim2.fromOffset(WIDTH * 0.85, (BASE_HEIGHT + HEADER_H) * 0.85),
+    SetBlur(false)
+    TweenSvc:Create(frame, TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.In), {
+        Size = UDim2.fromOffset(WIDTH * 0.9, (BASE_HEIGHT + HEADER_H) * 0.9),
         BackgroundTransparency = 1,
     }):Play()
-    task.delay(0.26, function()
+    task.delay(0.4, function()
         frame.Visible = false
         local vp = workspace.CurrentCamera.ViewportSize
         ReopenOrb.Position = UDim2.fromOffset(vp.X - 74, vp.Y - 94)
         ReopenOrb.BackgroundTransparency = 1
         ReopenOrb.Visible = true
-        TweenSvc:Create(ReopenOrb, TweenInfo.new(0.2), { BackgroundTransparency = 1 - T.WindowBgAlpha }):Play()
+        TweenSvc:Create(ReopenOrb, TweenInfo.new(0.3, Enum.EasingStyle.Exponential), { BackgroundTransparency = 1 - T.WindowBgAlpha }):Play()
     end)
 end
 
@@ -767,10 +891,11 @@ if not TrySilentLoad() then
     local targetSize  = frame.Size
     local targetAlpha = frame.BackgroundTransparency
 
-    frame.Size = UDim2.fromOffset(targetSize.X.Offset * 0.85, targetSize.Y.Offset * 0.85)
+    frame.Size = UDim2.fromOffset(targetSize.X.Offset * 0.9, targetSize.Y.Offset * 0.9)
     frame.BackgroundTransparency = 1
 
-    TweenSvc:Create(frame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    SetBlur(true)
+    TweenSvc:Create(frame, OPEN_CLOSE_TWEEN, {
         Size = targetSize,
         BackgroundTransparency = targetAlpha,
     }):Play()
