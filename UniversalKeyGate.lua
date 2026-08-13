@@ -469,6 +469,10 @@ local TabDashboard, TabSettings, TabPerf, TabInfo
 --  landing view. There is no separate License tab: one fewer sidebar
 --  entry, and no risk of the sidebar highlighting a tab that doesn't
 --  match what's on screen.
+--
+--  Every row below is full-width (UDim2.new(1,0,...)) so it lines up
+--  edge-to-edge with every other row -- no row is ever narrower than the
+--  content area and centered inside leftover space.
 -- ══════════════════════════════════════════════════════════════
 TabDashboard = Window:AddTab("Dashboard")
 
@@ -478,35 +482,34 @@ TabDashboard = Window:AddTab("Dashboard")
 -- the Perf/Info tab links above, same fix.
 local dashGameValue
 
+-- ── Authorization Overview: one full-width compact row, two mutually
+-- exclusive states (icon + status text on the left, the state-specific
+-- controls anchored to the right edge via Scale so they stay flush
+-- regardless of exact width).
 local licenseWrap = Instance.new("Frame")
-licenseWrap.Size = UDim2.new(1, 0, 0, 260)
+licenseWrap.Size = UDim2.new(1, 0, 0, 76)
 licenseWrap.BackgroundTransparency = 1
 licenseWrap.BorderSizePixel = 0
 licenseWrap.Parent = TabDashboard.Scroll
 
-local LIC_CARD_W = 300
-
-local EntryView = Panel(licenseWrap, UDim2.fromOffset(LIC_CARD_W, 220), UDim2.fromOffset((CONTENT_W - 40 - LIC_CARD_W) / 2, 20))
+local EntryView = Panel(licenseWrap, UDim2.new(1, 0, 1, 0))
 do
-    local iconCircle = Instance.new("Frame")
-    iconCircle.Size = UDim2.fromOffset(48, 48)
-    iconCircle.Position = UDim2.new(0.5, -24, 0, 20)
-    iconCircle.BackgroundColor3 = COLOR_DASH
-    iconCircle.BackgroundTransparency = 0.55
-    iconCircle.BorderSizePixel = 0
-    iconCircle.Parent = EntryView
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = iconCircle
-    Label(iconCircle, "K", 18, COLOR_DASH, UDim2.fromOffset(0,0), UDim2.new(1,0,1,0), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-
-    Label(EntryView, "Activate License", 13, T.TextPrimary, UDim2.fromOffset(0, 76), UDim2.new(1,0,0,16), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-    Label(EntryView, "Enter your key below to unlock the system features.", 10, T.TextMuted, UDim2.fromOffset(16, 96), UDim2.new(1,-32,0,26), Enum.Font.Gotham, Enum.TextXAlignment.Center)
+    local icon = Instance.new("Frame")
+    icon.Size = UDim2.fromOffset(36, 36)
+    icon.Position = UDim2.fromOffset(14, 20)
+    icon.BackgroundColor3 = COLOR_DASH
+    icon.BackgroundTransparency = 0.55
+    icon.BorderSizePixel = 0
+    icon.Parent = EntryView
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = icon
+    Label(icon, "K", 14, COLOR_DASH, UDim2.fromOffset(0,0), UDim2.new(1,0,1,0), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
 end
-
-local StatusLabel = Label(EntryView, "Press Validate to check the library.", 9, T.TextMuted, UDim2.fromOffset(16, 122), UDim2.new(1,-32,0,14), Enum.Font.Gotham, Enum.TextXAlignment.Center)
+Label(EntryView, "Activate License", 12, T.TextPrimary, UDim2.fromOffset(60, 14), UDim2.fromOffset(220, 16), Enum.Font.GothamBold)
+local StatusLabel = Label(EntryView, "Enter your key to unlock the system.", 9, T.TextMuted, UDim2.fromOffset(60, 32), UDim2.fromOffset(220, 14), Enum.Font.Gotham)
 
 local KeyInputBox = Instance.new("TextBox")
-KeyInputBox.Size = UDim2.new(1, -32, 0, 34)
-KeyInputBox.Position = UDim2.fromOffset(16, 142)
+KeyInputBox.Size = UDim2.new(1, -440, 0, 34)
+KeyInputBox.Position = UDim2.fromOffset(290, 21)
 KeyInputBox.BackgroundColor3 = PANEL_TINT
 KeyInputBox.BackgroundTransparency = 0.35
 KeyInputBox.BorderSizePixel = 0
@@ -527,8 +530,8 @@ do
 end
 
 local ValidateBtnFrame = Instance.new("TextButton")
-ValidateBtnFrame.Size = UDim2.new(1, -32, 0, 36)
-ValidateBtnFrame.Position = UDim2.fromOffset(16, 180)
+ValidateBtnFrame.Size = UDim2.fromOffset(122, 34)
+ValidateBtnFrame.Position = UDim2.new(1, -136, 0, 21)
 ValidateBtnFrame.BackgroundColor3 = COLOR_DASH
 ValidateBtnFrame.BackgroundTransparency = 0.5
 ValidateBtnFrame.BorderSizePixel = 0
@@ -536,7 +539,7 @@ ValidateBtnFrame.AutoButtonColor = false
 ValidateBtnFrame.Font = Enum.Font.GothamBold
 ValidateBtnFrame.TextSize = 11
 ValidateBtnFrame.TextColor3 = COLOR_DASH
-ValidateBtnFrame.Text = "VALIDATE LICENSE"
+ValidateBtnFrame.Text = "VALIDATE"
 ValidateBtnFrame.TextStrokeColor3 = TEXT_STROKE_COLOR
 ValidateBtnFrame.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
 ValidateBtnFrame.Parent = EntryView
@@ -545,37 +548,26 @@ do
     local s = Instance.new("UIStroke"); s.Color = COLOR_DASH; s.Transparency = 0.5; s.Thickness = 1; s.Parent = ValidateBtnFrame
 end
 
-local AuthedView = Instance.new("Frame")
-AuthedView.Size = UDim2.fromOffset(LIC_CARD_W, 240)
-AuthedView.Position = UDim2.fromOffset((CONTENT_W - 40 - LIC_CARD_W) / 2, 20)
-AuthedView.BackgroundTransparency = 1
-AuthedView.BorderSizePixel = 0
+local AuthedView = Panel(licenseWrap, UDim2.new(1, 0, 1, 0))
 AuthedView.Visible = false
-AuthedView.Parent = licenseWrap
-
-Label(AuthedView, "TIME REMAINING", 8, T.TextMuted, UDim2.fromOffset(0, 0), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-local AuthedTimerLabel = Label(AuthedView, "", 22, T.TextPrimary, UDim2.fromOffset(0, 12), UDim2.new(1,0,0,30), Enum.Font.Code, Enum.TextXAlignment.Center)
-
--- Authorization tier pill -- this system is single-tier today, so the
--- label is a constant, not fetched data; still surfaced explicitly so the
+do
+    local icon = Instance.new("Frame")
+    icon.Size = UDim2.fromOffset(36, 36)
+    icon.Position = UDim2.fromOffset(14, 20)
+    icon.BackgroundColor3 = COLOR_LIC
+    icon.BackgroundTransparency = 0.55
+    icon.BorderSizePixel = 0
+    icon.Parent = AuthedView
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = icon
+    Label(icon, "K", 14, COLOR_LIC, UDim2.fromOffset(0,0), UDim2.new(1,0,1,0), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+end
+Label(AuthedView, "Active License", 12, T.TextPrimary, UDim2.fromOffset(60, 14), UDim2.fromOffset(220, 16), Enum.Font.GothamBold)
+-- Authorization tier -- this system is single-tier today, so the label is
+-- a constant, not fetched data; still surfaced explicitly so the
 -- authenticated view always shows what level of access is active.
-local tierPill = Instance.new("Frame")
-tierPill.Size = UDim2.fromOffset(56, 18)
-tierPill.Position = UDim2.fromOffset(LIC_CARD_W - 16 - 56, 2)
-tierPill.BackgroundColor3 = DarkTint(COLOR_LIC)
-tierPill.BackgroundTransparency = 0.35
-tierPill.BorderSizePixel = 0
-tierPill.Parent = AuthedView
-do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = tierPill end
-do local s = Instance.new("UIStroke"); s.Color = COLOR_LIC; s.Transparency = 0.5; s.Thickness = 1; s.Parent = tierPill end
-Label(tierPill, "BASIC", 8, COLOR_LIC, UDim2.fromOffset(0,0), UDim2.new(1,0,1,0), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-
-local DetailsCard = Panel(AuthedView, UDim2.new(1, 0, 0, 110), UDim2.fromOffset(0, 54))
-local AuthedStatusLabel = Label(DetailsCard, "Session Details", 11, COLOR_LIC, UDim2.fromOffset(14, 12), UDim2.new(1,-28,0,16), Enum.Font.GothamBold)
-Label(DetailsCard, "SCRIPT TARGET", 8, T.TextMuted, UDim2.fromOffset(14, 36), UDim2.new(0.5,-14,0,12), Enum.Font.GothamBold)
-local AuthedScriptValue = Label(DetailsCard, "--", 10, T.TextSecondary, UDim2.fromOffset(14, 52), UDim2.new(0.5,-14,0,14), Enum.Font.GothamMedium)
-Label(DetailsCard, "GAME ID", 8, T.TextMuted, UDim2.fromOffset(0, 36), UDim2.new(0.5,-14,0,12), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
-Label(DetailsCard, tostring(PlaceId), 10, T.TextSecondary, UDim2.fromOffset(0, 52), UDim2.new(1,-14,0,14), Enum.Font.GothamMedium, Enum.TextXAlignment.Right)
+Label(AuthedView, "BASIC ACCESS", 9, COLOR_LIC, UDim2.fromOffset(60, 32), UDim2.fromOffset(220, 14), Enum.Font.GothamBold)
+Label(AuthedView, "TIME REMAINING", 8, T.TextMuted, UDim2.new(1, -180, 0, 16), UDim2.fromOffset(166, 10), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
+local AuthedTimerLabel = Label(AuthedView, "", 20, T.TextPrimary, UDim2.new(1, -180, 0, 28), UDim2.fromOffset(166, 28), Enum.Font.Code, Enum.TextXAlignment.Right)
 
 local function CleanKey(s)
     s = tostring(s or "")
@@ -625,38 +617,37 @@ end
 local function ShowAuthenticatedState(resolvedScript, expiresAt)
     EntryView.Visible = false
     AuthedView.Visible = true
-    AuthedScriptValue.Text = resolvedScript or "unknown"
     StartTimer(expiresAt)
     dashGameValue.Text = resolvedScript or tostring(PlaceId)
 end
 
-local dashRow1 = Instance.new("Frame")
-dashRow1.Size = UDim2.new(1, 0, 0, 84)
-dashRow1.BackgroundTransparency = 1
-dashRow1.BorderSizePixel = 0
-dashRow1.Parent = TabDashboard.Scroll
+-- ── Stats row: FPS / Resolved Game / Performance as three equal columns
+-- via a real UIListLayout (Scale-sized children), not manually computed
+-- pixel offsets -- so the row always divides evenly regardless of width.
+local dashStatsRow = Instance.new("Frame")
+dashStatsRow.Size = UDim2.new(1, 0, 0, 74)
+dashStatsRow.BackgroundTransparency = 1
+dashStatsRow.BorderSizePixel = 0
+dashStatsRow.Parent = TabDashboard.Scroll
+do
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.Padding = UDim.new(0, 10)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = dashStatsRow
+end
 
-local dashFpsCard = StatCard(dashRow1, {
-    Size = UDim2.new(1, 0, 0, 84),
-    Href = function() Window:_SelectTab(TabPerf) end,
-})
-Label(dashFpsCard, "FPS RATE", 8, T.TextMuted, UDim2.fromOffset(0, 10), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-local dashFpsValue = Label(dashFpsCard, "--", 16, T.TextPrimary, UDim2.fromOffset(0, 26), UDim2.new(1,0,0,20), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
-Label(dashFpsCard, "LIVE", 8, COLOR_PERF, UDim2.fromOffset(0, 50), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+local dashFpsCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
+AddIconSquare(dashFpsCard, COLOR_PERF, "F", 32, UDim2.fromOffset(12, 14))
+Label(dashFpsCard, "FPS RATE", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+local dashFpsValue = Label(dashFpsCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
-local dashRow2 = Instance.new("Frame")
-dashRow2.Size = UDim2.new(1, 0, 0, 60)
-dashRow2.BackgroundTransparency = 1
-dashRow2.BorderSizePixel = 0
-dashRow2.Parent = TabDashboard.Scroll
-
-local dashHalfW = math.floor((CONTENT_W - 20 - 10) / 2)
-local dashGameCard = StatCard(dashRow2, { Size = UDim2.fromOffset(dashHalfW, 60), Href = function() Window:_SelectTab(TabInfo) end })
+local dashGameCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabInfo) end })
 AddIconSquare(dashGameCard, COLOR_DASH, "G", 32, UDim2.fromOffset(12, 14))
 Label(dashGameCard, "RESOLVED GAME", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
 dashGameValue = Label(dashGameCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
-local dashPerfCard = StatCard(dashRow2, { Size = UDim2.fromOffset(dashHalfW, 60), Position = UDim2.fromOffset(dashHalfW + 10, 0), Href = function() Window:_SelectTab(TabPerf) end })
+local dashPerfCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashPerfCard, COLOR_PERF, "P", 32, UDim2.fromOffset(12, 14))
 Label(dashPerfCard, "PERFORMANCE", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
 local dashPerfValue = Label(dashPerfCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
