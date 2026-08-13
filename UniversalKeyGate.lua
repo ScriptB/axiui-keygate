@@ -1,5 +1,5 @@
 --[[
-    Universal Key Gate — Dashboard edition
+    Universal Key Gate — Dashboard edition (Superdesign port)
 
     THE loader every script (Finite included) should load from — not a
     per-script loader. Enter a key, and the finite-log-proxy Worker (1)
@@ -12,50 +12,28 @@
     — this file only builds the UI around it. No local HTTP bridge, no
     local JSON handling, no local validity decision.
 
-    AxiUI is now a FORK (axiui-keygate/AxiUI/, not ScriptB/Universal-Scripts)
-    edited directly rather than worked around from outside. The previous
-    approach hid the built-in macOS dots and hand-built a parallel sidebar
-    system from outside the library, fighting its internals at every step
-    -- fragile, and the actual root cause of the "shadow permanently
-    visible" bug (a shadow built externally as a one-time position snapshot
-    has no way to track the real window moving/hiding). This fork instead:
-      - removes the macOS dots at the source (gone, not hidden)
-      - makes a native left sidebar the framework's actual tab layout, with
-        icon-badge tabs built in (see AxiUI_Framework.lua's AddTab/_SelectTab)
-      - adds AxiUI:AddShadow(target), a shadow wired to the target's own
-        Position/Size/Visible via GetPropertyChangedSignal so it can never
-        desync from what it's shadowing
-      - adds CreateWindow's HeaderHeight/SidebarWidth options so a custom
-        header reserves its space natively instead of being repositioned
-        into existence after the fact
+    Visual layout is a faithful port of the approved Superdesign draft
+    (project a5fec5c4-e974-4aa2-bd8d-b515445af6bc, draft
+    3b670ab9-0f77-4b59-b00f-18d2bd4e7078, "Optimized Compact Dashboard UI"):
+    near-black glass window, per-tab colored badges (not one shared accent),
+    a Dashboard landing tab built from clickable status cards, a License tab
+    with two mutually-exclusive states (never both at once), Performance as
+    icon-rows, and a live Info list with copy-to-clipboard. Adapted, not
+    pixel-copied, where Roblox UI primitives don't have a CSS/Tailwind
+    equivalent (no icon font, so colored circles/letters stand in for
+    lucide icons; Settings keeps AxiUI's own real ThemeManager functionality
+    rather than the mockup's illustrative, non-functional Save/Reset).
 
-    Lifecycle: on a valid key (fresh entry OR a still-valid cached one from
-    a previous run in THIS game), the License tab switches from the key
-    field to an "Authenticated" state with a live expiry countdown, the
-    script loads in the background, and the window closes itself with an
-    animation — leaving a small draggable orb behind that reopens it. A
-    still-valid cached key skips straight to that closed/orb state with no
-    key-entry UI ever shown. A DIFFERENT game always prompts fresh, even
-    with a valid cached key from elsewhere (see TrySilentLoad).
+    AxiUI is a fork (axiui-keygate/AxiUI/, not ScriptB/Universal-Scripts),
+    edited directly: macOS dots removed at the source, a native left
+    sidebar with per-tab badge colors, a self-tracking AxiUI:AddShadow so a
+    shadow can never desync from the window it's shadowing, and
+    CreateWindow's HeaderHeight/SidebarWidth options so this file doesn't
+    have to reposition TabRow/ContentArea by hand.
 
-    Visual style: glassmorphism (translucent layered panels, soft gradient
-    sheen, light border, real drop shadows) plus a genuine background blur
-    (DepthOfFieldEffect, confirmed against Roblox's own docs -- see SetBlur)
-    while the window itself is open, matching how Fluent's own "Acrylic"
-    effect actually works. Panel opacity is calibrated well above a typical
-    CSS glassmorphism example (there's no real blur *behind a single panel*
-    the way CSS relies on, so low-opacity panels just read as invisible in
-    Roblox rather than "glassy").
-
-    Content is organized as an actual dashboard (Dashboard/License/Settings/
-    Performance/Info in a left sidebar), not a single settings-style list --
-    Dashboard is a real landing page with status cards, not another tab of
-    stacked rows.
-
-    Entire construction is wrapped in pcall so a future bug fails loud (a
-    warn() and nothing built) instead of silently killing the whole script
-    partway through with no UI and no explanation, which is what "UI not
-    loading" looks like from a real user's side when nothing is defensive.
+    Entire construction is wrapped in pcall so a future bug fails loud (one
+    warn(), nothing built) instead of silently killing the whole script
+    partway through with no explanation.
 
     Load:
         loadstring(game:HttpGet(
@@ -72,14 +50,11 @@ local StatsSvc     = game:GetService("Stats")
 local Lighting     = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
--- Real background blur (DepthOfFieldEffect), not a fake -- confirmed
--- against Roblox's own docs: FocusDistance sets where the sharp zone sits
--- (in studs from camera), InFocusRadius is the buffer around it that stays
--- sharp, NearIntensity/FarIntensity control blur strength on either side.
--- A small FocusDistance + tight InFocusRadius + FarIntensity up and
--- NearIntensity at 0 blurs the game world beyond that near point. Toggled
--- on only while the actual window is open -- minimized-to-orb shouldn't
--- blur the game the player is trying to get back to.
+local setclipboard = setclipboard or function(text) print("[Clipboard]", text) end
+
+-- Real background blur (DepthOfFieldEffect), confirmed against Roblox's own
+-- docs. Toggled on only while the window itself is open, not while
+-- minimized to the orb.
 local BlurEffect = Instance.new("DepthOfFieldEffect")
 BlurEffect.Name          = "UniversalKeyGate_Blur"
 BlurEffect.FocusDistance = 2
@@ -101,9 +76,7 @@ local function SetBlur(on)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  LOAD KEYAUTH — shared Worker-communication module. Loaded before AxiUI
---  so a still-valid cached key can skip straight to loading without ever
---  building a window at all.
+--  LOAD KEYAUTH
 -- ══════════════════════════════════════════════════════════════
 local KEYAUTH_MODULE_URL = "https://finite-log-proxy.asuneteric.workers.dev/keyauth.lua"
 
@@ -139,40 +112,50 @@ local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/axiui-keygate/main
 local AxiUI = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_Framework.lua"))()
 local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.lua"))()
 
--- Structural glass properties. Raised substantially from an earlier pass
--- (~5% GroupboxBgAlpha/ElementBgAlpha, ~70-80% WindowBgAlpha) that read as
--- "everything unreadable" -- there's no real blur *behind an individual
--- panel* the way CSS glassmorphism examples rely on, so low opacity just
--- looks like nothing is there. This pass prioritizes actual legibility.
 AxiUI:SetTheme({
-    GroupboxBg      = Color3.fromRGB(255, 255, 255),  GroupboxBgAlpha = 0.55,
-    ElementBg       = Color3.fromRGB(255, 255, 255),  ElementBgAlpha  = 0.42,
-    Border          = Color3.fromRGB(255, 255, 255),  BorderAlpha     = 0.30,
+    GroupboxBg      = Color3.fromRGB(255, 255, 255),  GroupboxBgAlpha = 0.05,
+    ElementBg       = Color3.fromRGB(255, 255, 255),  ElementBgAlpha  = 0.05,
+    Border          = Color3.fromRGB(255, 255, 255),  BorderAlpha     = 0.08,
 })
 
+-- Near-black glass, matching the approved design's dark gradient window
+-- (rgba(15,15,25,.97) -> rgba(5,5,10,.99)) approximated as a flat near-black
+-- at high opacity -- Roblox panels don't support a gradient window
+-- background directly, the UIGradient sheen below adds the diagonal light
+-- variation instead.
 ThemeManager:AddTheme("Glass", {
-    WindowBg      = Color3.fromRGB(18,  21,  28),   WindowBgAlpha  = 0.93,
-    Accent        = Color3.fromRGB(150, 178, 205),  AccentAlpha    = 0.38,
+    WindowBg      = Color3.fromRGB(10, 10, 16),     WindowBgAlpha  = 0.97,
+    Accent        = Color3.fromRGB(150, 178, 205),  AccentAlpha    = 0.30,
     AccentStrong  = Color3.fromRGB(205, 222, 238),
-    TextPrimary   = Color3.fromRGB(244, 247, 250),
-    TextSecondary = Color3.fromRGB(188, 197, 209),
-    TextMuted     = Color3.fromRGB(138, 148, 163),
+    TextPrimary   = Color3.fromRGB(255, 255, 255),
+    TextSecondary = Color3.fromRGB(200, 200, 210),
+    TextMuted     = Color3.fromRGB(140, 140, 155),
 })
 ThemeManager:Apply("Glass")
 
 local T = AxiUI.Theme
 
+-- Per-tab accent colors, matching the approved design (each tab keeps its
+-- own hue rather than one shared accent) -- also reused for Dashboard/Info
+-- card icon tints so the same color language carries through the whole UI.
+local COLOR_DASH  = Color3.fromRGB(96,  165, 250)  -- blue-400
+local COLOR_LIC   = Color3.fromRGB(52,  211, 153)  -- emerald-400
+local COLOR_SET   = Color3.fromRGB(192, 132, 252)  -- purple-400
+local COLOR_PERF  = Color3.fromRGB(251, 146, 60)   -- orange-400
+local COLOR_INFO  = Color3.fromRGB(34,  211, 238)  -- cyan-400
+local COLOR_BAD   = Color3.fromRGB(220, 120, 108)
+
 -- ══════════════════════════════════════════════════════════════
 --  WINDOW
 -- ══════════════════════════════════════════════════════════════
-local SIDEBAR_W  = 110
-local CONTENT_W  = 460
-local HEADER_H   = 64
+local SIDEBAR_W  = 90
+local CONTENT_W  = 760
+local HEADER_H   = 50
 local WIDTH      = CONTENT_W + SIDEBAR_W
-local HEIGHT     = 560
+local HEIGHT     = 550
 
 local Window = AxiUI:CreateWindow({
-    Title        = "Access",
+    Title        = "Universal Key Gate Dashboard",
     Width        = WIDTH,
     Height       = HEIGHT,
     HeaderHeight = HEADER_H,
@@ -184,16 +167,12 @@ do
     Window.Frame.Position = UDim2.fromOffset(math.floor(vp.X / 2), math.floor(vp.Y / 2))
 end
 
--- Real drop shadow, self-tracking (see AxiUI_Framework.lua's AddShadow) --
--- this is the actual fix for "shadow permanently visible no matter UI
--- location or state": it's wired to Window.Frame's own Position/Size/
--- Visible, not a one-time snapshot.
+-- Self-tracking drop shadow (see AxiUI_Framework.lua's AddShadow) -- wired
+-- to Window.Frame's own Position/Size/Visible, cannot desync from it.
 Window:AddShadow(Window.Frame)
 
--- Subtle diagonal glass sheen -- a soft light streak across the panel.
--- Paired with the real DepthOfFieldEffect blur above (SetBlur) while the
--- window is open, plus the drop shadow, for actual layered depth rather
--- than one flat translucent rectangle.
+-- Diagonal glass sheen, approximating the reference gradient window
+-- background's light variation.
 do
     local sheen = Instance.new("UIGradient")
     sheen.Color = ColorSequence.new({
@@ -202,17 +181,16 @@ do
         ColorSequenceKeypoint.new(1,   Color3.fromRGB(190, 205, 220)),
     })
     sheen.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0,   0.90),
-        NumberSequenceKeypoint.new(0.5, 0.97),
-        NumberSequenceKeypoint.new(1,   0.90),
+        NumberSequenceKeypoint.new(0,   0.94),
+        NumberSequenceKeypoint.new(0.5, 0.985),
+        NumberSequenceKeypoint.new(1,   0.94),
     })
     sheen.Rotation = 105
     sheen.Parent = Window.Frame
 end
 
 -- ══════════════════════════════════════════════════════════════
---  CUSTOM HEADER — avatar + time-of-day greeting, in the space
---  CreateWindow's HeaderHeight reserved natively.
+--  CUSTOM HEADER — avatar + time-of-day greeting
 -- ══════════════════════════════════════════════════════════════
 local function GetGreeting()
     local hour = DateTime.now():ToLocalTime().Hour
@@ -241,13 +219,13 @@ headerDiv.BackgroundTransparency = 1 - T.BorderAlpha
 headerDiv.BorderSizePixel        = 0
 headerDiv.Parent                 = HeaderRow
 
-local AVATAR_SIZE = 44
+local AVATAR_SIZE = 36
 local AvatarImg = Instance.new("ImageLabel")
 AvatarImg.Name                  = "Avatar"
 AvatarImg.Size                  = UDim2.fromOffset(AVATAR_SIZE, AVATAR_SIZE)
-AvatarImg.Position              = UDim2.fromOffset(14, (HEADER_H - AVATAR_SIZE) / 2)
+AvatarImg.Position              = UDim2.fromOffset(16, (HEADER_H - AVATAR_SIZE) / 2)
 AvatarImg.BackgroundColor3      = Color3.fromRGB(255, 255, 255)
-AvatarImg.BackgroundTransparency = 0.85
+AvatarImg.BackgroundTransparency = 0.9
 AvatarImg.BorderSizePixel       = 0
 AvatarImg.Image                 = ""
 AvatarImg.ScaleType             = Enum.ScaleType.Crop
@@ -274,11 +252,11 @@ task.spawn(function()
 end)
 
 local GreetingLbl = Instance.new("TextLabel")
-GreetingLbl.Size                   = UDim2.new(1, -(14 + AVATAR_SIZE + 12 + 12), 0, 18)
-GreetingLbl.Position               = UDim2.fromOffset(14 + AVATAR_SIZE + 12, HEADER_H / 2 - 19)
+GreetingLbl.Size                   = UDim2.new(1, -(16 + AVATAR_SIZE + 10 + 12), 0, 16)
+GreetingLbl.Position               = UDim2.fromOffset(16 + AVATAR_SIZE + 10, HEADER_H / 2 - 16)
 GreetingLbl.BackgroundTransparency = 1
 GreetingLbl.Font                   = Enum.Font.GothamBold
-GreetingLbl.TextSize               = 14
+GreetingLbl.TextSize               = 13
 GreetingLbl.TextColor3             = T.TextPrimary
 GreetingLbl.TextXAlignment         = Enum.TextXAlignment.Left
 GreetingLbl.TextTruncate           = Enum.TextTruncate.AtEnd
@@ -287,113 +265,316 @@ GreetingLbl.Parent                 = HeaderRow
 
 local SubLbl = Instance.new("TextLabel")
 SubLbl.Size                   = GreetingLbl.Size
-SubLbl.Position               = UDim2.fromOffset(14 + AVATAR_SIZE + 12, HEADER_H / 2 + 2)
+SubLbl.Position               = UDim2.fromOffset(16 + AVATAR_SIZE + 10, HEADER_H / 2 + 1)
 SubLbl.BackgroundTransparency = 1
 SubLbl.Font                   = Enum.Font.Gotham
-SubLbl.TextSize               = 11
-SubLbl.TextColor3             = T.TextSecondary
+SubLbl.TextSize               = 10
+SubLbl.TextColor3             = T.TextMuted
 SubLbl.TextXAlignment         = Enum.TextXAlignment.Left
 SubLbl.TextTruncate           = Enum.TextTruncate.AtEnd
-SubLbl.Text                   = "Game ID " .. tostring(PlaceId)
+SubLbl.Text                   = "Current Session ID: " .. tostring(PlaceId)
 SubLbl.Parent                 = HeaderRow
 
 -- ══════════════════════════════════════════════════════════════
---  CARD HELPER — small bordered stat panels, laid out in a row. This is
---  what actually makes Dashboard/Performance read as a dashboard rather
---  than a settings-style stacked list.
+--  SMALL VISUAL HELPERS
 -- ══════════════════════════════════════════════════════════════
-local function AddCardRow(groupbox, cardSpecs)
-    local row = Instance.new("Frame")
-    row.Size                   = UDim2.new(1, -16, 0, 62)
-    row.BackgroundTransparency = 1
-    row.BorderSizePixel        = 0
-    row.Parent                 = groupbox.Body
+local function Panel(parent, size, position)
+    local p = Instance.new("Frame")
+    p.Size                   = size
+    p.Position               = position or UDim2.fromOffset(0, 0)
+    p.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
+    p.BackgroundTransparency = 0.96
+    p.BorderSizePixel        = 0
+    p.Parent                 = parent
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = p
+    local s = Instance.new("UIStroke")
+    s.Color = T.Border; s.Transparency = 1 - T.BorderAlpha; s.Thickness = 1; s.Parent = p
+    return p
+end
 
-    local list = Instance.new("UIListLayout")
-    list.FillDirection = Enum.FillDirection.Horizontal
-    list.Padding        = UDim.new(0, 8)
-    list.SortOrder       = Enum.SortOrder.LayoutOrder
-    list.Parent          = row
+-- A clickable status card: icon square (or dot) + label + value, optional
+-- tint color and click-through to another tab. Used across Dashboard/Info.
+local function StatCard(parent, opts)
+    local card = Instance.new(opts.Href and "TextButton" or "Frame")
+    if opts.Href then card.Text = "" ; card.AutoButtonColor = false end
+    card.Size                   = opts.Size
+    card.Position               = opts.Position or UDim2.fromOffset(0, 0)
+    card.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
+    card.BackgroundTransparency = opts.Tint and 0.94 or 0.96
+    card.BorderSizePixel        = 0
+    card.Parent                 = parent
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = card
+    local strokeColor = opts.Tint or T.Border
+    local s = Instance.new("UIStroke")
+    s.Color = strokeColor; s.Transparency = opts.Tint and 0.75 or (1 - T.BorderAlpha); s.Thickness = 1; s.Parent = card
 
-    local cardW = math.floor((CONTENT_W - 16 - 16 - (#cardSpecs - 1) * 8) / #cardSpecs)
-    local cards = {}
-
-    for _, spec in ipairs(cardSpecs) do
-        local card = Instance.new("Frame")
-        card.Size                   = UDim2.fromOffset(cardW, 62)
-        card.BackgroundColor3       = T.ElementBg
-        card.BackgroundTransparency = 1 - T.ElementBgAlpha
-        card.BorderSizePixel        = 0
-        card.Parent                 = row
-        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = card
-        local s = Instance.new("UIStroke")
-        s.Color = T.Border; s.Transparency = 1 - T.BorderAlpha; s.Thickness = 1; s.Parent = card
-
-        local titleLbl = Instance.new("TextLabel")
-        titleLbl.Size                   = UDim2.new(1, -12, 0, 14)
-        titleLbl.Position               = UDim2.fromOffset(8, 6)
-        titleLbl.BackgroundTransparency = 1
-        titleLbl.Font                   = Enum.Font.Gotham
-        titleLbl.TextSize               = 10
-        titleLbl.TextColor3             = T.TextSecondary
-        titleLbl.TextXAlignment         = Enum.TextXAlignment.Left
-        titleLbl.Text                   = spec.Title
-        titleLbl.Parent                 = card
-
-        local valueLbl = Instance.new("TextLabel")
-        valueLbl.Size                   = UDim2.new(1, -12, 0, 28)
-        valueLbl.Position               = UDim2.fromOffset(8, 24)
-        valueLbl.BackgroundTransparency = 1
-        valueLbl.Font                   = Enum.Font.GothamBold
-        valueLbl.TextSize               = 17
-        valueLbl.TextColor3             = T.TextPrimary
-        valueLbl.TextXAlignment         = Enum.TextXAlignment.Left
-        valueLbl.Text                   = spec.Value or "--"
-        valueLbl.Parent                 = card
-
-        cards[spec.Key or spec.Title] = valueLbl
+    if opts.Href then
+        card.MouseEnter:Connect(function()
+            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = (opts.Tint and 0.90 or 0.92) }):Play()
+        end)
+        card.MouseLeave:Connect(function()
+            TweenSvc:Create(card, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = opts.Tint and 0.94 or 0.96 }):Play()
+        end)
+        card.MouseButton1Click:Connect(opts.Href)
     end
 
-    return cards
+    return card
+end
+
+local function AddIconSquare(parent, color, letter, size, pos)
+    local sq = Instance.new("Frame")
+    sq.Size                   = UDim2.fromOffset(size, size)
+    sq.Position               = pos
+    sq.BackgroundColor3       = color
+    sq.BackgroundTransparency = 0.88
+    sq.BorderSizePixel        = 0
+    sq.Parent                 = parent
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, math.floor(size * 0.3)); c.Parent = sq
+    local s = Instance.new("UIStroke")
+    s.Color = color; s.Transparency = 0.75; s.Thickness = 1; s.Parent = sq
+    local lbl = Instance.new("TextLabel")
+    lbl.Size                   = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Font                   = Enum.Font.GothamBold
+    lbl.TextSize               = math.floor(size * 0.4)
+    lbl.TextColor3             = color
+    lbl.Text                   = letter
+    lbl.Parent                 = sq
+    return sq
+end
+
+local function Label(parent, text, size, color, pos, sz, font, align)
+    local l = Instance.new("TextLabel")
+    l.Size                   = sz
+    l.Position               = pos
+    l.BackgroundTransparency = 1
+    l.Font                   = font or Enum.Font.Gotham
+    l.TextSize               = size
+    l.TextColor3             = color
+    l.TextXAlignment          = align or Enum.TextXAlignment.Left
+    l.TextTruncate            = Enum.TextTruncate.AtEnd
+    l.Text                   = text
+    l.Parent                 = parent
+    return l
 end
 
 -- ══════════════════════════════════════════════════════════════
---  DASHBOARD TAB — a real landing page, not another settings list: status
---  cards giving an at-a-glance summary, matching what an actual dashboard
---  looks like rather than a box with tabs.
+--  TOAST — small bottom-center popup, anchored to the window (not the
+--  whole screen), for copy-to-clipboard feedback.
 -- ══════════════════════════════════════════════════════════════
-local TabDashboard = Window:AddTab("Dashboard", { Icon = "D" })
-local BoxOverview = TabDashboard:AddGroupbox("Overview")
-local overviewCards = AddCardRow(BoxOverview, {
-    { Key = "Status", Title = "LICENSE",  Value = "Checking…" },
-    { Key = "Game",   Title = "GAME",     Value = tostring(PlaceId) },
-    { Key = "FPS",    Title = "FPS",      Value = "--" },
+local Toast = Instance.new("TextLabel")
+Toast.Size                   = UDim2.fromOffset(180, 34)
+Toast.AnchorPoint             = Vector2.new(0.5, 1)
+Toast.Position                = UDim2.new(0.5, 0, 1, 40)
+Toast.BackgroundColor3        = Color3.fromRGB(255, 255, 255)
+Toast.BackgroundTransparency  = 0.85
+Toast.BorderSizePixel         = 0
+Toast.Font                    = Enum.Font.GothamBold
+Toast.TextSize                = 12
+Toast.TextColor3              = T.TextPrimary
+Toast.Text                    = ""
+Toast.ZIndex                  = 40
+Toast.Parent                  = Window.Frame
+do
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1, 0); c.Parent = Toast
+    local s = Instance.new("UIStroke")
+    s.Color = T.Border; s.Transparency = 1 - T.BorderAlpha; s.Thickness = 1; s.Parent = Toast
+end
+
+local function ShowToast(msg)
+    Toast.Text = msg
+    TweenSvc:Create(Toast, TweenInfo.new(0.3, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, 0, 1, -16),
+    }):Play()
+    task.delay(2, function()
+        TweenSvc:Create(Toast, TweenInfo.new(0.3, Enum.EasingStyle.Exponential, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, 0, 1, 40),
+        }):Play()
+    end)
+end
+
+-- Forward-declared: Dashboard's cards (built below) link to License/
+-- Performance/Info, all defined later in the file. A click handler
+-- closure resolves a free variable lexically at the point it's DEFINED --
+-- without this, TabLicense/TabPerf/TabInfo wouldn't exist as locals yet
+-- when these closures are created, so they'd silently capture globals
+-- (nil) instead of the real tab objects, and clicking those cards would
+-- throw inside Window:_SelectTab(nil).
+local TabDashboard, TabLicense, TabSettings, TabPerf, TabInfo
+
+-- ══════════════════════════════════════════════════════════════
+--  DASHBOARD TAB
+-- ══════════════════════════════════════════════════════════════
+TabDashboard = Window:AddTab("Dash", { Icon = "D", BadgeColor = COLOR_DASH })
+
+local dashRow1 = Instance.new("Frame")
+dashRow1.Size = UDim2.new(1, 0, 0, 84)
+dashRow1.BackgroundTransparency = 1
+dashRow1.BorderSizePixel = 0
+dashRow1.Parent = TabDashboard.Scroll
+
+local dashCardW = math.floor((CONTENT_W - 20 - 20 - 10) * 2 / 3)
+local dashCardW2 = (CONTENT_W - 20 - 20 - 10) - dashCardW
+
+local dashLicenseCard = StatCard(dashRow1, {
+    Size = UDim2.fromOffset(dashCardW, 84), Tint = COLOR_LIC,
+    Href = function() Window:_SelectTab(TabLicense) end,
 })
-BoxOverview:AddLabel(
-    "Head to the License tab to authenticate, or Info to see every game currently supported.",
-    { Color = T.TextMuted }
-)
+Label(dashLicenseCard, "SESSION LICENSE", 9, Color3.fromRGB(
+    math.floor(COLOR_LIC.R*255*0.7), math.floor(COLOR_LIC.G*255*0.7), math.floor(COLOR_LIC.B*255*0.7)),
+    UDim2.fromOffset(12, 10), UDim2.new(1, -24, 0, 12), Enum.Font.GothamBold)
+local dashStatusDot = Instance.new("Frame")
+dashStatusDot.Size = UDim2.fromOffset(8, 8)
+dashStatusDot.Position = UDim2.fromOffset(12, 32)
+dashStatusDot.BackgroundColor3 = COLOR_BAD
+dashStatusDot.BorderSizePixel = 0
+dashStatusDot.Parent = dashLicenseCard
+do local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = dashStatusDot end
+local dashStatusLbl = Label(dashLicenseCard, "Enter a key", 13, T.TextPrimary,
+    UDim2.fromOffset(26, 26), UDim2.new(1, -38, 0, 18), Enum.Font.GothamBold)
+local dashKeyHintLbl = Label(dashLicenseCard, "", 8, T.TextMuted,
+    UDim2.fromOffset(12, 50), UDim2.new(1, -24, 0, 12), Enum.Font.Code)
 
--- ══════════════════════════════════════════════════════════════
---  LICENSE TAB — two states: key entry, or authenticated + live expiry
--- ══════════════════════════════════════════════════════════════
-local TabLicense = Window:AddTab("License", { Icon = "L" })
-
-local EntryBox = TabLicense:AddGroupbox("Authentication")
-local StatusLabel = EntryBox:AddLabel(
-    "Press Validate to check the library.",
-    { Color = T.TextMuted }
-)
-local KeyInput = EntryBox:AddInput("KeyInput", {
-    Text        = "License Key",
-    Placeholder = "Enter your key",
+local dashFpsCard = StatCard(dashRow1, {
+    Size = UDim2.fromOffset(dashCardW2, 84), Position = UDim2.fromOffset(dashCardW + 10, 0),
+    Href = function() Window:_SelectTab(TabPerf) end,
 })
-local ValidateBtn = EntryBox:AddButton({ Text = "Validate" })
+Label(dashFpsCard, "FPS RATE", 8, T.TextMuted, UDim2.fromOffset(0, 10), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+local dashFpsValue = Label(dashFpsCard, "--", 16, T.TextPrimary, UDim2.fromOffset(0, 26), UDim2.new(1,0,0,20), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+Label(dashFpsCard, "LIVE", 8, COLOR_PERF, UDim2.fromOffset(0, 50), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
 
-local AuthedBox = TabLicense:AddGroupbox("Authentication")
-AuthedBox.Container.Visible = false
-local AuthedStatusLabel = AuthedBox:AddLabel("Authenticated", { Color = Color3.fromRGB(140, 205, 165) })
-local AuthedTimerLabel  = AuthedBox:AddLabel("", { Color = T.TextSecondary })
+local dashRow2 = Instance.new("Frame")
+dashRow2.Size = UDim2.new(1, 0, 0, 60)
+dashRow2.BackgroundTransparency = 1
+dashRow2.BorderSizePixel = 0
+dashRow2.Parent = TabDashboard.Scroll
+
+local dashHalfW = math.floor((CONTENT_W - 20 - 10) / 2)
+local dashGameCard = StatCard(dashRow2, { Size = UDim2.fromOffset(dashHalfW, 60), Href = function() Window:_SelectTab(TabInfo) end })
+AddIconSquare(dashGameCard, COLOR_DASH, "G", 32, UDim2.fromOffset(12, 14))
+Label(dashGameCard, "RESOLVED GAME", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+local dashGameValue = Label(dashGameCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
+
+local dashPerfCard = StatCard(dashRow2, { Size = UDim2.fromOffset(dashHalfW, 60), Position = UDim2.fromOffset(dashHalfW + 10, 0), Href = function() Window:_SelectTab(TabPerf) end })
+AddIconSquare(dashPerfCard, COLOR_PERF, "P", 32, UDim2.fromOffset(12, 14))
+Label(dashPerfCard, "PERFORMANCE", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+local dashPerfValue = Label(dashPerfCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
+
+local dashOverview = Panel(TabDashboard.Scroll, UDim2.new(1, 0, 0, 100))
+Label(dashOverview, "Quick Overview", 12, T.TextSecondary, UDim2.fromOffset(14, 12), UDim2.new(1, -28, 0, 16), Enum.Font.GothamBold)
+Label(dashOverview, "Enter a key on the License tab to unlock the loaded script. Live performance and the full game library are in the sidebar.",
+    10, T.TextMuted, UDim2.fromOffset(14, 32), UDim2.new(1, -28, 0, 34))
+local dashLicLink = Instance.new("TextButton")
+dashLicLink.Size = UDim2.fromOffset(130, 16)
+dashLicLink.Position = UDim2.fromOffset(14, 74)
+dashLicLink.BackgroundTransparency = 1
+dashLicLink.Font = Enum.Font.GothamBold
+dashLicLink.TextSize = 10
+dashLicLink.TextColor3 = COLOR_DASH
+dashLicLink.TextXAlignment = Enum.TextXAlignment.Left
+dashLicLink.Text = "MANAGE LICENSE"
+dashLicLink.AutoButtonColor = false
+dashLicLink.Parent = dashOverview
+local dashInfoLink = Instance.new("TextButton")
+dashInfoLink.Size = UDim2.fromOffset(110, 16)
+dashInfoLink.Position = UDim2.fromOffset(150, 74)
+dashInfoLink.BackgroundTransparency = 1
+dashInfoLink.Font = Enum.Font.GothamBold
+dashInfoLink.TextSize = 10
+dashInfoLink.TextColor3 = COLOR_INFO
+dashInfoLink.TextXAlignment = Enum.TextXAlignment.Left
+dashInfoLink.Text = "SYSTEM INFO"
+dashInfoLink.AutoButtonColor = false
+dashInfoLink.Parent = dashOverview
+
+-- ══════════════════════════════════════════════════════════════
+--  LICENSE TAB — two states: key entry, or authenticated + live expiry.
+--  Never both visible at once.
+-- ══════════════════════════════════════════════════════════════
+TabLicense = Window:AddTab("License", { Icon = "L", BadgeColor = COLOR_LIC })
+dashLicLink.MouseButton1Click:Connect(function() Window:_SelectTab(TabLicense) end)
+dashInfoLink.MouseButton1Click:Connect(function() Window:_SelectTab(TabInfo) end)
+
+local licenseWrap = Instance.new("Frame")
+licenseWrap.Size = UDim2.new(1, 0, 1, 0)
+licenseWrap.BackgroundTransparency = 1
+licenseWrap.BorderSizePixel = 0
+licenseWrap.Parent = TabLicense.Scroll
+
+local LIC_CARD_W = 300
+
+local EntryView = Panel(licenseWrap, UDim2.fromOffset(LIC_CARD_W, 220), UDim2.fromOffset((CONTENT_W - 40 - LIC_CARD_W) / 2, 20))
+do
+    local iconCircle = Instance.new("Frame")
+    iconCircle.Size = UDim2.fromOffset(48, 48)
+    iconCircle.Position = UDim2.new(0.5, -24, 0, 20)
+    iconCircle.BackgroundColor3 = COLOR_DASH
+    iconCircle.BackgroundTransparency = 0.88
+    iconCircle.BorderSizePixel = 0
+    iconCircle.Parent = EntryView
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1,0); c.Parent = iconCircle
+    Label(iconCircle, "K", 18, COLOR_DASH, UDim2.fromOffset(0,0), UDim2.new(1,0,1,0), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+
+    Label(EntryView, "Activate License", 13, T.TextPrimary, UDim2.fromOffset(0, 76), UDim2.new(1,0,0,16), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+    Label(EntryView, "Enter your key below to unlock the system features.", 10, T.TextMuted, UDim2.fromOffset(16, 96), UDim2.new(1,-32,0,26), Enum.Font.Gotham, Enum.TextXAlignment.Center)
+end
+
+local StatusLabel = Label(EntryView, "Press Validate to check the library.", 9, T.TextMuted, UDim2.fromOffset(16, 122), UDim2.new(1,-32,0,14), Enum.Font.Gotham, Enum.TextXAlignment.Center)
+
+local KeyInputBox = Instance.new("TextBox")
+KeyInputBox.Size = UDim2.new(1, -32, 0, 34)
+KeyInputBox.Position = UDim2.fromOffset(16, 142)
+KeyInputBox.BackgroundColor3 = Color3.fromRGB(255,255,255)
+KeyInputBox.BackgroundTransparency = 0.94
+KeyInputBox.BorderSizePixel = 0
+KeyInputBox.Font = Enum.Font.GothamMedium
+KeyInputBox.TextSize = 11
+KeyInputBox.TextColor3 = T.TextPrimary
+KeyInputBox.PlaceholderText = "Enter activation key..."
+KeyInputBox.PlaceholderColor3 = T.TextMuted
+KeyInputBox.Text = ""
+KeyInputBox.ClearTextOnFocus = false
+KeyInputBox.Parent = EntryView
+do
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = KeyInputBox
+    local s = Instance.new("UIStroke"); s.Color = T.Border; s.Transparency = 1 - T.BorderAlpha; s.Thickness = 1; s.Parent = KeyInputBox
+    local p = Instance.new("UIPadding"); p.PaddingLeft = UDim.new(0,10); p.PaddingRight = UDim.new(0,10); p.Parent = KeyInputBox
+end
+
+local ValidateBtnFrame = Instance.new("TextButton")
+ValidateBtnFrame.Size = UDim2.new(1, -32, 0, 36)
+ValidateBtnFrame.Position = UDim2.fromOffset(16, 180)
+ValidateBtnFrame.BackgroundColor3 = COLOR_DASH
+ValidateBtnFrame.BackgroundTransparency = 0.8
+ValidateBtnFrame.BorderSizePixel = 0
+ValidateBtnFrame.AutoButtonColor = false
+ValidateBtnFrame.Font = Enum.Font.GothamBold
+ValidateBtnFrame.TextSize = 11
+ValidateBtnFrame.TextColor3 = COLOR_DASH
+ValidateBtnFrame.Text = "VALIDATE LICENSE"
+ValidateBtnFrame.Parent = EntryView
+do
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = ValidateBtnFrame
+    local s = Instance.new("UIStroke"); s.Color = COLOR_DASH; s.Transparency = 0.65; s.Thickness = 1; s.Parent = ValidateBtnFrame
+end
+
+local AuthedView = Instance.new("Frame")
+AuthedView.Size = UDim2.fromOffset(LIC_CARD_W, 240)
+AuthedView.Position = UDim2.fromOffset((CONTENT_W - 40 - LIC_CARD_W) / 2, 20)
+AuthedView.BackgroundTransparency = 1
+AuthedView.BorderSizePixel = 0
+AuthedView.Visible = false
+AuthedView.Parent = licenseWrap
+
+Label(AuthedView, "TIME REMAINING", 8, T.TextMuted, UDim2.fromOffset(0, 0), UDim2.new(1,0,0,10), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
+local AuthedTimerLabel = Label(AuthedView, "", 22, T.TextPrimary, UDim2.fromOffset(0, 12), UDim2.new(1,0,0,30), Enum.Font.Code, Enum.TextXAlignment.Center)
+
+local DetailsCard = Panel(AuthedView, UDim2.new(1, 0, 0, 110), UDim2.fromOffset(0, 54))
+local AuthedStatusLabel = Label(DetailsCard, "Session Details", 11, COLOR_LIC, UDim2.fromOffset(14, 12), UDim2.new(1,-28,0,16), Enum.Font.GothamBold)
+Label(DetailsCard, "SCRIPT TARGET", 8, T.TextMuted, UDim2.fromOffset(14, 36), UDim2.new(0.5,-14,0,12), Enum.Font.GothamBold)
+local AuthedScriptValue = Label(DetailsCard, "--", 10, T.TextSecondary, UDim2.fromOffset(14, 52), UDim2.new(0.5,-14,0,14), Enum.Font.GothamMedium)
+Label(DetailsCard, "GAME ID", 8, T.TextMuted, UDim2.fromOffset(0, 36), UDim2.new(0.5,-14,0,12), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
+Label(DetailsCard, tostring(PlaceId), 10, T.TextSecondary, UDim2.fromOffset(0, 52), UDim2.new(1,-14,0,14), Enum.Font.GothamMedium, Enum.TextXAlignment.Right)
 
 local function CleanKey(s)
     s = tostring(s or "")
@@ -416,13 +597,13 @@ local function FormatRemaining(msRemaining)
     local h = math.floor(totalSeconds / 3600)
     local m = math.floor((totalSeconds % 3600) / 60)
     local s = totalSeconds % 60
-    return string.format("Expires in %02d:%02d:%02d", h, m, s)
+    return string.format("%02d:%02d:%02d", h, m, s)
 end
 
 local function StartTimer(expiresAt)
     StopTimer()
     if expiresAt == nil then
-        AuthedTimerLabel.Text = "Lifetime access — never expires."
+        AuthedTimerLabel.Text = "∞"
         return
     end
     timerThread = task.spawn(function()
@@ -436,51 +617,58 @@ local function StartTimer(expiresAt)
 end
 
 local function ShowAuthenticatedState(resolvedScript, expiresAt)
-    EntryBox.Container.Visible  = false
-    AuthedBox.Container.Visible = true
-    AuthedStatusLabel.Text = resolvedScript
-        and ("Authenticated — \"" .. resolvedScript .. "\".")
-        or "Authenticated."
+    EntryView.Visible = false
+    AuthedView.Visible = true
+    AuthedScriptValue.Text = resolvedScript or "unknown"
     StartTimer(expiresAt)
-    overviewCards.Status.Text = "Active"
-    overviewCards.Status.TextColor3 = Color3.fromRGB(140, 205, 165)
+    dashStatusDot.BackgroundColor3 = COLOR_LIC
+    dashStatusLbl.Text = "Authenticated"
+    dashKeyHintLbl.Text = resolvedScript and ("Script: " .. resolvedScript) or ""
+    dashGameValue.Text = resolvedScript or tostring(PlaceId)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SETTINGS TAB
+--  SETTINGS TAB — real ThemeManager functionality (dropdown, rainbow
+--  accent, save/load custom), not the mockup's illustrative buttons.
 -- ══════════════════════════════════════════════════════════════
-local TabSettings = Window:AddTab("Settings", { Icon = "S" })
+TabSettings = Window:AddTab("Settings", { Icon = "S", BadgeColor = COLOR_SET })
 ThemeManager:ApplyToTab(TabSettings)
 
 -- ══════════════════════════════════════════════════════════════
---  PERFORMANCE TAB — stat cards, not a plain list.
+--  PERFORMANCE TAB — icon rows (FPS / Ping / Memory)
 -- ══════════════════════════════════════════════════════════════
-local TabPerf = Window:AddTab("Performance", { Icon = "P" })
-local BoxPerf = TabPerf:AddGroupbox("Live Stats")
-local perfCards = AddCardRow(BoxPerf, {
-    { Key = "FPS",    Title = "FPS",    Value = "--" },
-    { Key = "Ping",   Title = "PING",   Value = "--" },
-    { Key = "Memory", Title = "MEMORY", Value = "--" },
-})
+TabPerf = Window:AddTab("Perf", { Icon = "P", BadgeColor = COLOR_PERF })
 
--- FrameTime is Roblox's own per-frame render time in seconds (Stats
--- service) -- FPS = 1/FrameTime. GetNetworkPing() returns seconds, so *1000
--- for ms. GetTotalMemoryUsageMb() is already in MB. All three are official
--- engine APIs, not hand-rolled measurements.
+local function PerfRow(color, letter)
+    local row = Panel(TabPerf.Scroll, UDim2.new(1, 0, 0, 58))
+    AddIconSquare(row, color, letter, 40, UDim2.fromOffset(12, 9))
+    local valueLbl = Label(row, "--", 15, T.TextPrimary, UDim2.fromOffset(64, 12), UDim2.new(1,-76,0,20), Enum.Font.GothamBold)
+    local labelLbl = Label(row, "", 8, T.TextMuted, UDim2.fromOffset(64, 32), UDim2.new(1,-76,0,12), Enum.Font.GothamBold)
+    return valueLbl, labelLbl
+end
+
+local fpsValueLbl, fpsLabelLbl = PerfRow(COLOR_PERF, "F")
+fpsLabelLbl.Text = "FPS RATE"
+local pingValueLbl, pingLabelLbl = PerfRow(COLOR_DASH, "N")
+pingLabelLbl.Text = "ENGINE LATENCY"
+local memValueLbl, memLabelLbl = PerfRow(COLOR_SET, "M")
+memLabelLbl.Text = "ALLOCATED MEMORY"
+
 task.spawn(function()
     while true do
         local statOk = pcall(function()
             local frameTime = StatsSvc.FrameTime
             local fps = frameTime > 0 and (1 / frameTime) or 0
-            local fpsText = tostring(math.floor(fps + 0.5))
-            perfCards.FPS.Text = fpsText
-            overviewCards.FPS.Text = fpsText
+            local fpsText = string.format("%.1f", fps)
+            fpsValueLbl.Text = fpsText
+            dashFpsValue.Text = tostring(math.floor(fps + 0.5))
 
             local pingMs = LocalPlayer:GetNetworkPing() * 1000
-            perfCards.Ping.Text = string.format("%d ms", math.floor(pingMs + 0.5))
+            pingValueLbl.Text = string.format("%d ms", math.floor(pingMs + 0.5))
+            dashPerfValue.Text = string.format("%d ms", math.floor(pingMs + 0.5))
 
             local memMb = StatsSvc:GetTotalMemoryUsageMb()
-            perfCards.Memory.Text = string.format("%d MB", math.floor(memMb + 0.5))
+            memValueLbl.Text = string.format("%.1f MB", memMb)
         end)
         if not statOk then break end
         task.wait(1)
@@ -490,16 +678,64 @@ end)
 -- ══════════════════════════════════════════════════════════════
 --  INFO TAB — live from the Worker, never a hardcoded/phantom list.
 -- ══════════════════════════════════════════════════════════════
-local TabInfo = Window:AddTab("Info", { Icon = "I" })
-local BoxInfo = TabInfo:AddGroupbox("Supported Games")
-local InfoStatusLabel = BoxInfo:AddLabel("Loading…", { Color = T.TextMuted })
-local infoEntryLabels = {}
+TabInfo = Window:AddTab("Info", { Icon = "I", BadgeColor = COLOR_INFO })
+
+Label(TabInfo.Scroll, "Supported Games", 12, T.TextPrimary, UDim2.fromOffset(0,0), UDim2.new(1,0,0,16), Enum.Font.GothamBold)
+
+local InfoStatusLabel = Label(TabInfo.Scroll, "Loading…", 10, T.TextMuted, UDim2.fromOffset(0,0), UDim2.new(1,0,0,16))
+local infoEntryRows = {}
 
 local function ClearInfoEntries()
-    for _, lbl in ipairs(infoEntryLabels) do
-        pcall(function() lbl:Destroy() end)
+    for _, row in ipairs(infoEntryRows) do
+        pcall(function() row:Destroy() end)
     end
-    infoEntryLabels = {}
+    infoEntryRows = {}
+end
+
+local function AddInfoRow(place)
+    local label = place.displayName or ("PlaceId " .. tostring(place.placeId))
+    local row = Instance.new("TextButton")
+    row.Size = UDim2.new(1, 0, 0, 48)
+    row.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    row.BackgroundTransparency = 0.96
+    row.BorderSizePixel = 0
+    row.Text = ""
+    row.AutoButtonColor = false
+    row.Parent = TabInfo.Scroll
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = row
+    local s = Instance.new("UIStroke"); s.Color = T.Border; s.Transparency = 1 - T.BorderAlpha; s.Thickness = 1; s.Parent = row
+
+    AddIconSquare(row, COLOR_INFO, label:sub(1,1):upper(), 30, UDim2.fromOffset(10, 9))
+    Label(row, label, 11, T.TextPrimary, UDim2.fromOffset(50, 8), UDim2.new(1, -130, 0, 14), Enum.Font.GothamBold)
+    Label(row, "ID: " .. tostring(place.placeId), 8, T.TextMuted, UDim2.fromOffset(50, 24), UDim2.new(1, -130, 0, 12), Enum.Font.Code)
+
+    local liveTag = Instance.new("TextLabel")
+    liveTag.Size = UDim2.fromOffset(38, 14)
+    liveTag.Position = UDim2.new(1, -80, 0, 17)
+    liveTag.BackgroundColor3 = COLOR_INFO
+    liveTag.BackgroundTransparency = 0.85
+    liveTag.BorderSizePixel = 0
+    liveTag.Font = Enum.Font.GothamBold
+    liveTag.TextSize = 8
+    liveTag.TextColor3 = COLOR_INFO
+    liveTag.Text = "LIVE"
+    liveTag.Parent = row
+    do local c2 = Instance.new("UICorner"); c2.CornerRadius = UDim.new(0,4); c2.Parent = liveTag end
+
+    local copyLbl = Label(row, "Copy ID", 9, T.TextMuted, UDim2.new(1, -34, 0, 17), UDim2.fromOffset(30, 14), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
+
+    row.MouseEnter:Connect(function()
+        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.92 }):Play()
+    end)
+    row.MouseLeave:Connect(function()
+        TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.96 }):Play()
+    end)
+    row.MouseButton1Click:Connect(function()
+        pcall(setclipboard, tostring(place.placeId))
+        ShowToast("Copied Place ID: " .. tostring(place.placeId))
+    end)
+
+    table.insert(infoEntryRows, row)
 end
 
 local function RefreshInfo()
@@ -510,8 +746,7 @@ local function RefreshInfo()
     local places, truncatedOrReason = KeyAuth.ListPlaces()
     if not places then
         InfoStatusLabel.Text = "Couldn't reach the server: " .. tostring(truncatedOrReason)
-        InfoStatusLabel.TextColor3 = Color3.fromRGB(210, 120, 108)
-        overviewCards.Game.Text = tostring(PlaceId)
+        InfoStatusLabel.TextColor3 = COLOR_BAD
         return
     end
 
@@ -522,24 +757,17 @@ local function RefreshInfo()
 
     InfoStatusLabel.Text = tostring(#places) .. " game" .. (#places == 1 and "" or "s") .. " currently supported:"
     for _, place in ipairs(places) do
-        local label = place.displayName and (place.displayName)
-            or ("PlaceId " .. tostring(place.placeId))
-        local lbl = BoxInfo:AddLabel("• " .. label, { Color = T.TextSecondary })
-        table.insert(infoEntryLabels, lbl)
+        AddInfoRow(place)
     end
 end
 
-BoxInfo:AddButton({ Text = "Refresh", Callback = RefreshInfo })
 task.spawn(RefreshInfo)
 
 -- ══════════════════════════════════════════════════════════════
---  CLOSE / REOPEN — closes with an animation to a small draggable orb
---  instead of destroying the window; the orb reopens it, now showing the
---  Authenticated state instead of the key field.
+--  CLOSE / REOPEN — closes with an animation to a small draggable orb.
 -- ══════════════════════════════════════════════════════════════
 local ReopenOrb = nil
-local ReopenWindow -- forward-declared: BuildReopenOrb's click handler closes
-                    -- over this local and calls it once assigned below.
+local ReopenWindow
 
 local function BuildReopenOrb()
     if ReopenOrb then return ReopenOrb end
@@ -573,7 +801,7 @@ local function BuildReopenOrb()
     dot.Size                   = UDim2.fromOffset(10, 10)
     dot.AnchorPoint             = Vector2.new(0.5, 0.5)
     dot.Position                = UDim2.new(0.5, 0, 0.5, 0)
-    dot.BackgroundColor3        = T.AccentStrong
+    dot.BackgroundColor3        = COLOR_LIC
     dot.BorderSizePixel         = 0
     dot.Parent                  = orb
     local dc = Instance.new("UICorner")
@@ -587,7 +815,6 @@ local function BuildReopenOrb()
         TweenSvc:Create(orb, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 1 - T.WindowBgAlpha }):Play()
     end)
 
-    -- Draggable, same technique AxiUI's own window uses internally.
     local dragging, dragInput, mouseStart, orbStart = false, nil, nil, nil
     local dragDistance = 0
     orb.InputBegan:Connect(function(inp)
@@ -658,7 +885,7 @@ local function CloseToOrb()
 end
 
 -- ══════════════════════════════════════════════════════════════
---  AUTH SUCCESS — shared by fresh key entry and the silent cached path.
+--  AUTH SUCCESS
 -- ══════════════════════════════════════════════════════════════
 local function OnLoadStage(key)
     local fetchOk, source = KeyAuth.FetchScriptForPlace(PlaceId, key)
@@ -706,16 +933,16 @@ local validating = false
 local function SubmitKey()
     if validating then return end
 
-    local key = CleanKey(AxiUI.Flags["KeyInput"])
+    local key = CleanKey(KeyInputBox.Text)
     if key == "" then
         StatusLabel.Text = "Enter a key first."
-        StatusLabel.TextColor3 = Color3.fromRGB(210, 120, 108)
+        StatusLabel.TextColor3 = COLOR_BAD
         Shake(Window.Frame)
         return
     end
 
     validating = true
-    ValidateBtn.Button.Text = "Validating..."
+    ValidateBtnFrame.Text = "VALIDATING..."
     StatusLabel.Text = "Checking key..."
     StatusLabel.TextColor3 = T.TextMuted
 
@@ -726,21 +953,20 @@ local function SubmitKey()
         AxiUI:Notify("Access", "Key accepted.", 2)
         OnAuthenticated(key, resolvedScript, expiresAt, false)
     else
-        ValidateBtn.Button.Text = "Validate"
+        ValidateBtnFrame.Text = "VALIDATE LICENSE"
         StatusLabel.Text = reason or "Invalid key — try again."
-        StatusLabel.TextColor3 = Color3.fromRGB(210, 120, 108)
-        overviewCards.Status.Text = "Invalid"
-        overviewCards.Status.TextColor3 = Color3.fromRGB(210, 120, 108)
+        StatusLabel.TextColor3 = COLOR_BAD
+        dashStatusDot.BackgroundColor3 = COLOR_BAD
+        dashStatusLbl.Text = "Invalid key"
         Shake(Window.Frame)
     end
 end
 
-ValidateBtn.Button.MouseButton1Click:Connect(SubmitKey)
+ValidateBtnFrame.MouseButton1Click:Connect(SubmitKey)
 
 -- ══════════════════════════════════════════════════════════════
 --  SILENT PATH — a cached key from a previous validated run in THIS exact
---  game, still valid right now. Jumps straight to the closed/orb state
---  with the Authenticated view underneath, no key-entry UI ever shown.
+--  game, still valid right now.
 -- ══════════════════════════════════════════════════════════════
 local function TrySilentLoad()
     local cachedKey, cachedUserId = KeyAuth.LoadCachedKey(CACHE_FILE)
@@ -756,10 +982,9 @@ local function TrySilentLoad()
 end
 
 -- Invisible from the very start -- TrySilentLoad's VerifyForPlace call is a
--- real network round-trip, and without this the raw window (key-entry tab
--- and all) would flash on screen for that entire duration before
--- OnAuthenticated ever gets a chance to hide it, defeating the whole point
--- of "no key-entry UI ever shown" for a cached-key rejoin.
+-- real network round-trip, and without this the raw window would flash on
+-- screen for that duration before OnAuthenticated ever gets a chance to
+-- hide it.
 Window.Frame.Visible = false
 
 if not TrySilentLoad() then
@@ -777,8 +1002,6 @@ if not TrySilentLoad() then
         BackgroundTransparency = targetAlpha,
     }):Play()
 end
-
-overviewCards.Status.Text = overviewCards.Status.Text == "Checking…" and "Enter a key" or overviewCards.Status.Text
 
 end)
 

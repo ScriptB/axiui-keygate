@@ -639,16 +639,12 @@ function AxiUI:_BuildTitleBar()
     -- level by hiding them after the fact; removed at the source instead
     -- now that this is a dedicated fork, not a shared upstream library.)
 
-    -- Title (centre)
-    local title = MakeLabel(bar, self.Title, 12, T.TextPrimary,
-        Enum.TextXAlignment.Center, Enum.Font.GothamBold)
-    title.Size = UDim2.new(1,0,1,0)
-
-    -- Version (right)
-    local ver = MakeLabel(bar, "v" .. AxiUI.Version, 9, T.TextMuted,
-        Enum.TextXAlignment.Right)
-    ver.Size     = UDim2.new(1,-10,1,0)
-    ver.Position = UDim2.fromOffset(0,0)
+    -- Small uppercase left-aligned label, not a centered title + version --
+    -- matches the reference design's understated title bar.
+    local title = MakeLabel(bar, self.Title:upper(), 9, T.TextMuted,
+        Enum.TextXAlignment.Left, Enum.Font.GothamMedium)
+    title.Size     = UDim2.new(1, -28, 1, 0)
+    title.Position = UDim2.fromOffset(14, 0)
 
     self.TitleBar = bar
 end
@@ -775,17 +771,24 @@ function AxiUI:AddTab(name, options)
     btn.Parent                 = self.TabRow
     AddCorner(btn, UDim.new(0, 6))
 
+    -- BadgeColor: each tab keeps its own fixed color (not toggled by
+    -- selection state) -- matches the reference design, where only the
+    -- button's own background/label dim with selection, not the badge hue.
+    local badgeColor = options.BadgeColor or T.Accent
+    local badgeAlpha = options.BadgeAlpha or T.AccentAlpha
+
     local badge = Instance.new("Frame")
     badge.Size                   = UDim2.fromOffset(22, 22)
     badge.Position               = UDim2.fromOffset(6, 7)
-    badge.BackgroundColor3       = T.Accent
-    badge.BackgroundTransparency = 1 - T.AccentAlpha
+    badge.BackgroundColor3       = badgeColor
+    badge.BackgroundTransparency = 1 - badgeAlpha
     badge.BorderSizePixel        = 0
     badge.Parent                 = btn
     AddCorner(badge, UDim.new(1, 0))
+    AddStroke(badge, badgeColor, badgeAlpha + 0.15, 1)
 
     local badgeLbl = MakeLabel(badge, (options.Icon or name:sub(1,1)):upper(), 11,
-        T.TextPrimary, Enum.TextXAlignment.Center, Enum.Font.GothamBold)
+        badgeColor, Enum.TextXAlignment.Center, Enum.Font.GothamBold)
     badgeLbl.Size = UDim2.new(1,0,1,0)
 
     local nameLbl = MakeLabel(btn, name, 12, T.TextMuted,
@@ -834,16 +837,17 @@ function AxiUI:AddTab(name, options)
     return tab
 end
 
+-- Badge color/opacity is fixed per-tab (set once in AddTab) and never
+-- toggled here -- only the button's own background and the label dim with
+-- selection, matching the reference design.
 function AxiUI:_SelectTab(tab)
     for _, t in ipairs(self.Tabs) do
         Tween(t.Button,  { BackgroundTransparency = 1 }, 0.15)
         Tween(t.NameLbl, { TextColor3 = T.TextMuted }, 0.15)
-        Tween(t.Badge,   { BackgroundTransparency = 1 - T.AccentAlpha - 0.15 }, 0.15)
         t.Scroll.Visible = false
     end
-    Tween(tab.Button,  { BackgroundTransparency = 1 - T.AccentAlpha }, 0.15)
+    Tween(tab.Button,  { BackgroundTransparency = 1 - 0.10 }, 0.15)
     Tween(tab.NameLbl, { TextColor3 = T.TextPrimary }, 0.15)
-    Tween(tab.Badge,   { BackgroundTransparency = 1 - T.AccentAlpha }, 0.15)
     tab.Scroll.Visible = true
     self.ActiveTab = tab
 end
