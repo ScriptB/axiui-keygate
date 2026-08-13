@@ -1,25 +1,27 @@
 # axiui-keygate
 
-A single-file key-gate, built on [AxiUI](https://github.com/ScriptB/Universal-Scripts/tree/main/AxiUI), backed by the real `finite-log-proxy` Cloudflare Worker (the same one [`keyauth.lua`](https://github.com/ScriptB/finite-log-proxy/blob/main/public/keyauth.lua) uses, just with AxiUI's look instead of Fluent's).
+**THE loader every script in this project should load from** — not a per-script loader. Built on [AxiUI](https://github.com/ScriptB/Universal-Scripts/tree/main/AxiUI), backed by the real `finite-log-proxy` Cloudflare Worker (same one [`keyauth.lua`](https://github.com/ScriptB/finite-log-proxy/blob/main/public/keyauth.lua) uses — this file delegates all Worker communication to it, same as Finite does).
 
 | File | Role |
 |---|---|
-| `UniversalKeyGate.lua` | Renders the key-entry window, verifies the key against the Worker's `/api/key/verify`, and on success fetches the actual protected script from the Worker's `/api/script/fetch` and runs it. Never decides validity itself — the Worker does. |
+| `UniversalKeyGate.lua` | Renders the key-entry window. On submit: `KeyAuth.VerifyForPlace(game.PlaceId, key)` — the Worker resolves PlaceId to a script **server-side** and checks the key against it in one call. On success: `KeyAuth.FetchScriptForPlace(game.PlaceId, key)` fetches and runs the actual payload. Never decides anything itself — the Worker does, and this file has no PlaceId → script table anywhere in it. |
 
-There is no `scripts/` folder and no `GameDispatcher.lua` here — those were retired. A plain GitHub-hosted "dispatcher" file that gets fetched and run after a key check is a dead end: anyone who has its URL can `game:HttpGet` + `loadstring` it directly and skip the key check entirely, the same way `raw.githubusercontent.com` payloads always can. See `Documentation/KV-Script-Hosting-Plan.md` in the main project repo for the full writeup of why this moved server-side.
+There is no `scripts/` folder, no `GameDispatcher.lua`, and — as of this version — no local `ScriptMap` either. All three were retired for the same reason: anything that decides "which script for which game" client-side is either a public-URL bypass waiting to happen (`GameDispatcher.lua`) or just unnecessary duplication now that the Worker does it authoritatively (`ScriptMap`). See `Documentation/KV-Script-Hosting-Plan.md` in the main project repo for the full writeup.
 
 ## How it actually works now
 
 ```
 UniversalKeyGate.lua
-  → POST /api/key/verify   { key, userId, script }   → { valid, reason }
-  → on valid: POST /api/script/fetch   { key, userId, script }
-      Worker re-verifies the SAME key server-side, looks up the script
-      in a KV namespace no plain URL can reach, returns its source
+  → POST /api/key/verify   { key, userId, placeId }   → { valid, reason, script }
+      Worker resolves place:<placeId> -> script id, checks the key against
+      THAT script id -- this file never sends or knows a script id itself
+  → on valid: POST /api/script/fetch   { key, userId, placeId }
+      Worker re-verifies the SAME key server-side, resolves the same
+      placeId -> script id again, returns its source from SCRIPTS_KV
   → client loadstring()s the response body directly
 ```
 
-`script` here is a small identifier (e.g. `"myscript"`) — not the PlaceId itself. `UniversalKeyGate.lua`'s local `ScriptMap` table maps `PlaceId -> script id`; that mapping is not sensitive (it only says "this game runs the script named X"), only the script *source* is protected, and that never touches GitHub or any plain URL.
+Both calls happen through `keyauth.lua`'s `VerifyForPlace`/`FetchScriptForPlace` — this file has zero local HTTP/JSON handling.
 
 ## Entry point
 
@@ -38,9 +40,14 @@ loadstring(game:HttpGet(
      -H "X-Admin-Secret: <secret>" -H "Content-Type: application/json" \
      -d '{"script":"myscript","source":"<lua source as a JSON string>"}'
    ```
-3. Add `[PlaceId] = "myscript"` to `ScriptMap` in `UniversalKeyGate.lua`, commit, push.
+3. Map the PlaceId to that script id:
+   ```bash
+   curl -X POST https://finite-log-proxy.asuneteric.workers.dev/api/admin/place/map \
+     -H "X-Admin-Secret: <secret>" -H "Content-Type: application/json" \
+     -d '{"placeId":"<PlaceId>","script":"myscript"}'
+   ```
 
-No `git push` is needed to update the script itself going forward — only step 2 (a KV write) is required to change what a game actually loads. `ScriptMap` only needs a push when a *new* game is added.
+Neither step touches this repo. **`UniversalKeyGate.lua` itself never needs to change or be pushed again for a new game** — every game/script addition is purely server-side (an upload + a place mapping). This file only changes if the loader's own behavior changes.
 
 ## Status
 

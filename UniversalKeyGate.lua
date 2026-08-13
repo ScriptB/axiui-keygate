@@ -1,18 +1,21 @@
 --[[
     Universal Key Gate — AxiUI edition
-    Renders an AxiUI key-entry window backed by the real finite-log-proxy
-    Worker (https://finite-log-proxy.asuneteric.workers.dev). On success it
-    fetches this game's script directly from the Worker's KV-gated
-    /api/script/fetch endpoint and loadstring()s the response body — the
-    payload itself is never reachable by a plain URL; the Worker independently
-    re-verifies the key server-side before ever touching the KV store.
 
-    This file never embeds a payload and never trusts a client-side check —
-    every decision (is this key valid, is it valid for THIS script) is made
-    by the Worker, the same way keyauth.lua (this project's existing Fluent-
-    based key client) already does it. This is the same pattern, same
-    Worker, just with AxiUI's look instead of Fluent's, plus the KV script
-    fetch step keyauth.lua doesn't need (Finite.lua distributes differently).
+    THE loader every script (Finite included) should load from — not a
+    per-script loader. Enter a key, and the finite-log-proxy Worker (1)
+    checks the key, (2) resolves game.PlaceId to whichever script that game
+    maps to, (3) returns that script only if the key is valid for it. No
+    PlaceId -> script table exists anywhere in this file, or in any client
+    code at all — that mapping lives entirely server-side (SCRIPTS_KV's
+    "place:<PlaceId>" entries, set via POST /api/admin/place/map). A future
+    game/script needs zero changes here; just a new place mapping + a
+    SCRIPTS_KV upload on the Worker side.
+
+    All Worker communication is delegated to the shared keyauth.lua module
+    (same one Finite/FiniteLoader.lua uses) via KeyAuth.VerifyForPlace /
+    KeyAuth.FetchScriptForPlace — this file only builds the AxiUI window
+    around it. No local HTTP bridge, no local JSON handling, no local
+    validity decision: every "is this allowed" answer comes from the Worker.
 
     See Documentation/KV-Script-Hosting-Plan.md for the full architecture.
 
@@ -30,10 +33,19 @@ local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/Universal-Scripts/
 local AxiUI = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_Framework.lua"))()
 loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.lua"))()
 
-local Players     = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
-local TweenSvc    = game:GetService("TweenService")
-local LocalPlayer = Players.LocalPlayer
+local TweenSvc = game:GetService("TweenService")
+
+-- ══════════════════════════════════════════════════════════════
+--  LOAD KEYAUTH — shared Worker-communication module. Same file every
+--  script in this project uses; this loader adds no HTTP logic of its own.
+-- ══════════════════════════════════════════════════════════════
+local KEYAUTH_MODULE_URL = "https://finite-log-proxy.asuneteric.workers.dev/keyauth.lua"
+
+local KeyAuth = loadstring(game:HttpGet(KEYAUTH_MODULE_URL))()
+if type(KeyAuth) ~= "table" or type(KeyAuth.VerifyForPlace) ~= "function" or type(KeyAuth.FetchScriptForPlace) ~= "function" then
+    warn("[UniversalKeyGate] Failed to load KeyAuth module from " .. KEYAUTH_MODULE_URL .. " -- aborting")
+    return
+end
 
 -- ══════════════════════════════════════════════════════════════
 --  FLAT, SOLID THEME  (no gradients, no glow, no neon purple/blue/green)
@@ -53,65 +65,7 @@ AxiUI:SetTheme({
 local FLAT_SUCCESS = Color3.fromRGB(126, 158, 110)
 local FLAT_ERROR    = Color3.fromRGB(196, 96,  84)
 
--- ══════════════════════════════════════════════════════════════
---  1. INITIALIZATION — current Game ID
--- ══════════════════════════════════════════════════════════════
 local PlaceId = game.PlaceId
-
--- ══════════════════════════════════════════════════════════════
---  2. SCRIPT LIBRARY — PlaceId -> script id. This mapping is NOT
---  sensitive (it only says "this game runs the script named X"); the
---  actual protected content lives server-side in SCRIPTS_KV, keyed by
---  the same script id, and is never served without a valid key for it.
---  This replaces the old GameDispatcher.lua (retired — it was a plain
---  public GitHub file, which defeated the point of a key gate).
--- ══════════════════════════════════════════════════════════════
-local ScriptMap = {
-    -- [PlaceId] = "script-id",   -- script-id must match a key's `scripts`
-    --                               list on the Worker (or the key must be
-    --                               scoped "*") and a SCRIPTS_KV entry
-    --                               uploaded via /api/admin/script/upload.
-}
-
--- ══════════════════════════════════════════════════════════════
---  3. WORKER — real key verify + KV-gated script fetch. Same Worker
---  keyauth.lua already uses; both endpoints re-check the key
---  server-side, this file holds no secret and makes no local decision.
--- ══════════════════════════════════════════════════════════════
-local WORKER_BASE = "https://finite-log-proxy.asuneteric.workers.dev"
-local VERIFY_URL  = WORKER_BASE .. "/api/key/verify"
-local FETCH_URL   = WORKER_BASE .. "/api/script/fetch"
-
--- Executors expose their own HTTP bypass under different names (and plain
--- HttpService:RequestAsync is still bound by the game's domain allowlist on
--- some of them) -- prefer the executor's own request function when present,
--- same fallback chain keyauth.lua uses.
-local HttpRequest = syn and syn.request or http_request or request or (fluxus and fluxus.request) or (http and http.request) or nil
-
-local function PostJSON(url, jsonBody)
-    if HttpRequest then
-        local ok, res = pcall(HttpRequest, {
-            Url = url,
-            Method = "POST",
-            Headers = { ["Content-Type"] = "application/json" },
-            Body = jsonBody,
-        })
-        if not ok then return false, nil, tostring(res) end
-        local status = res and (res.StatusCode or res.Status)
-        return (type(status) == "number" and status >= 200 and status < 300), status, res and res.Body
-    end
-
-    local ok, res = pcall(function()
-        return HttpService:RequestAsync({
-            Url = url,
-            Method = "POST",
-            Headers = { ["Content-Type"] = "application/json" },
-            Body = jsonBody,
-        })
-    end)
-    if not ok then return false, nil, tostring(res) end
-    return res.Success == true, res.StatusCode, res.Body
-end
 
 -- Pasting into a Roblox TextBox commonly drags in invisible characters
 -- (trailing newline, stray spaces, zero-width space U+200B) that don't show
@@ -121,47 +75,6 @@ local function CleanKey(s)
     s = s:gsub("\226\128\139", "")
     s = s:gsub("^%s+", ""):gsub("%s+$", "")
     return s
-end
-
--- Returns valid(bool), reason-or-nil. Server-authoritative: this never
--- decides validity itself, only relays what the Worker said.
-local function ValidateKey(key, scriptId)
-    local _, status, body = PostJSON(VERIFY_URL, HttpService:JSONEncode({
-        key    = key,
-        userId = tostring(LocalPlayer.UserId),
-        script = scriptId,
-    }))
-    if body then
-        local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
-        if ok and type(data) == "table" and data.valid ~= nil then
-            return data.valid == true, data.reason
-        end
-    end
-    return false, "Could not reach the key server (HTTP " .. tostring(status) .. ")."
-end
-
--- Fetches the actual protected payload. The Worker independently re-runs
--- the same key check ValidateKey above triggered -- this call cannot
--- succeed with a key that failed (or was never sent through) that check.
--- Returns ok(bool), sourceOrReason(string).
-local function FetchScript(key, scriptId)
-    local ok, status, body = PostJSON(FETCH_URL, HttpService:JSONEncode({
-        key    = key,
-        userId = tostring(LocalPlayer.UserId),
-        script = scriptId,
-    }))
-    if ok and body then
-        return true, body
-    end
-    if body then
-        local decodeOk, data = pcall(function() return HttpService:JSONDecode(body) end)
-        if decodeOk and type(data) == "table" and (data.error or data.reason) then
-            return false, tostring(data.error or data.reason)
-        end
-        -- 404 body from /api/script/fetch is plain text, not JSON.
-        return false, tostring(body)
-    end
-    return false, "Could not reach the script server (HTTP " .. tostring(status) .. ")."
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -182,12 +95,8 @@ end
 local Tab = Window:AddTab("License")
 local Box = Tab:AddGroupbox("Authentication")
 
-local ScriptId = ScriptMap[PlaceId]
-
 local StatusLabel = Box:AddLabel(
-    ScriptId
-        and ("Game ID " .. tostring(PlaceId) .. " — matched to \"" .. ScriptId .. "\".")
-        or ("Game ID " .. tostring(PlaceId) .. " — not yet in the library."),
+    "Game ID " .. tostring(PlaceId) .. " — press Validate to check the library.",
     { Color = AxiUI.Theme.TextMuted }
 )
 
@@ -199,7 +108,7 @@ local KeyInput = Box:AddInput("KeyInput", {
 local ValidateBtn = Box:AddButton({ Text = "Validate" })
 
 -- ══════════════════════════════════════════════════════════════
---  4. KEY VALIDATION — submit, animate, resolve
+--  KEY VALIDATION — submit, animate, resolve
 -- ══════════════════════════════════════════════════════════════
 local validating = false
 
@@ -228,7 +137,7 @@ local function PlayExit(onDone)
 end
 
 local function OnLoadStage(key)
-    local ok, source = FetchScript(key, ScriptId)
+    local ok, source = KeyAuth.FetchScriptForPlace(PlaceId, key)
     if not ok then
         warn("[UniversalKeyGate] Script fetch failed: " .. tostring(source))
         return
@@ -244,13 +153,6 @@ end
 local function SubmitKey()
     if validating then return end
 
-    if not ScriptId then
-        StatusLabel.Text = "This game isn't in the library yet — nothing to load."
-        StatusLabel.TextColor3 = FLAT_ERROR
-        Shake(Window.Frame)
-        return
-    end
-
     local key = CleanKey(AxiUI.Flags["KeyInput"])
     if key == "" then
         StatusLabel.Text = "Enter a key first."
@@ -264,12 +166,15 @@ local function SubmitKey()
     StatusLabel.Text = "Checking key..."
     StatusLabel.TextColor3 = AxiUI.Theme.TextMuted
 
-    local ok, reason = ValidateKey(key, ScriptId)
+    -- The Worker does everything here: is this key valid, is it valid for
+    -- THIS game (resolved from PlaceId, not anything this file knows), all
+    -- in one call. `resolvedScript` is purely for the status message below.
+    local ok, reason, resolvedScript = KeyAuth.VerifyForPlace(PlaceId, key)
 
     validating = false
     if ok then
         ValidateBtn.Button.Text = "Validated"
-        StatusLabel.Text = "Access granted."
+        StatusLabel.Text = "Access granted" .. (resolvedScript and (" — \"" .. resolvedScript .. "\".") or ".")
         StatusLabel.TextColor3 = FLAT_SUCCESS
         AxiUI:Notify("Access", "Key accepted.", 2)
         task.wait(0.4)
@@ -285,7 +190,7 @@ end
 ValidateBtn.Button.MouseButton1Click:Connect(SubmitKey)
 
 -- ══════════════════════════════════════════════════════════════
---  5. ENTRANCE ANIMATION
+--  ENTRANCE ANIMATION
 -- ══════════════════════════════════════════════════════════════
 do
     local frame = Window.Frame
