@@ -62,7 +62,7 @@ local function RunPayload(source)
 end
 
 -- Load UI Framework
-local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/axiui-keygate/9f25c3ef9b4baa038ec4853df4595ea6b3026af9/AxiUI/"
+local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/axiui-keygate/50460315064c44c1316c4091cad0d9840ae0ec78/AxiUI/"
 
 local AxiUI = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_Framework.lua"))()
 local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.lua"))()
