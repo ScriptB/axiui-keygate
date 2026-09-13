@@ -76,14 +76,14 @@ ThemeManager:AddTheme("Glass", {
     AccentStrong  = Color3.fromRGB(225, 205, 165),
     TextPrimary   = Color3.fromRGB(255, 255, 255),
     TextSecondary = Color3.fromRGB(214, 212, 206),
-    TextMuted     = Color3.fromRGB(176, 172, 164),
+    TextMuted     = Color3.fromRGB(205, 201, 195),
 })
 ThemeManager:Apply("Glass")
 
 local T = AxiUI.Theme
 
 
-local TEXT_STROKE_TRANSPARENCY = 0.72
+local TEXT_STROKE_TRANSPARENCY = 0.55
 local TEXT_STROKE_COLOR = Color3.new(0, 0, 0)
 
 
@@ -457,7 +457,7 @@ end
 Label(AuthedView, "Active License", 12, T.TextPrimary, UDim2.fromOffset(60, 14), UDim2.fromOffset(220, 16), Enum.Font.GothamBold)
 
 Label(AuthedView, "AUTHENTICATED", 9, COLOR_LIC, UDim2.fromOffset(60, 32), UDim2.fromOffset(220, 14), Enum.Font.GothamBold)
-Label(AuthedView, "TIME REMAINING", 8, T.TextMuted, UDim2.new(1, -180, 0, 16), UDim2.fromOffset(166, 10), Enum.Font.Gotham, Enum.TextXAlignment.Right)
+Label(AuthedView, "TIME REMAINING", 9, T.TextMuted, UDim2.new(1, -180, 0, 16), UDim2.fromOffset(166, 10), Enum.Font.Gotham, Enum.TextXAlignment.Right)
 local AuthedTimerLabel = Label(AuthedView, "", 20, T.TextPrimary, UDim2.new(1, -180, 0, 28), UDim2.fromOffset(166, 28), Enum.Font.Code, Enum.TextXAlignment.Right)
 
 local function CleanKey(s)
@@ -526,17 +526,17 @@ end
 
 local dashFpsCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashFpsCard, COLOR_PERF, "F", 32, UDim2.fromOffset(12, 14))
-Label(dashFpsCard, "FPS", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.Gotham)
+Label(dashFpsCard, "FPS", 9, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.Gotham)
 local dashFpsValue = Label(dashFpsCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
 local dashPingCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashPingCard, COLOR_DASH, "N", 32, UDim2.fromOffset(12, 14))
-Label(dashPingCard, "LATENCY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.Gotham)
+Label(dashPingCard, "LATENCY", 9, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.Gotham)
 local dashPingValue = Label(dashPingCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
 local dashMemCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashMemCard, COLOR_SET, "M", 32, UDim2.fromOffset(12, 14))
-Label(dashMemCard, "MEMORY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.Gotham)
+Label(dashMemCard, "MEMORY", 9, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.Gotham)
 local dashMemValue = Label(dashMemCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
 local dashOverview = Panel(TabDashboard.Scroll, UDim2.new(1, 0, 0, 78))
@@ -574,7 +574,7 @@ local function PerfRow(color, letter)
     local row = Panel(TabPerf.Scroll, UDim2.new(1, 0, 0, 58))
     AddIconSquare(row, color, letter, 40, UDim2.fromOffset(12, 9))
     local valueLbl = Label(row, "--", 15, T.TextPrimary, UDim2.fromOffset(64, 12), UDim2.new(1,-76,0,20), Enum.Font.GothamBold)
-    local labelLbl = Label(row, "", 8, T.TextMuted, UDim2.fromOffset(64, 32), UDim2.new(1,-76,0,12), Enum.Font.Gotham)
+    local labelLbl = Label(row, "", 9, T.TextMuted, UDim2.fromOffset(64, 32), UDim2.new(1,-76,0,12), Enum.Font.Gotham)
     return valueLbl, labelLbl
 end
 
@@ -646,7 +646,7 @@ local function AddInfoRow(place)
 
     AddIconSquare(row, COLOR_INFO, label:sub(1,1):upper(), 30, UDim2.fromOffset(10, 9))
     local nameLbl = Label(row, label, 11, T.TextPrimary, UDim2.fromOffset(50, 8), UDim2.new(1, -130, 0, 14), Enum.Font.GothamBold)
-    Label(row, "ID: " .. tostring(place.placeId), 8, T.TextMuted, UDim2.fromOffset(50, 24), UDim2.new(1, -130, 0, 12), Enum.Font.Code)
+    Label(row, "ID: " .. tostring(place.placeId), 9, T.TextMuted, UDim2.fromOffset(50, 24), UDim2.new(1, -130, 0, 12), Enum.Font.Code)
 
     if not hasDisplayName then
         task.spawn(function()
