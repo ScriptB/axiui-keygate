@@ -9,7 +9,9 @@ local HttpSvc = game:GetService("HttpService")
 local T       = AxiUI.Theme
 
 local COLOR_KEYS = {
-    "WindowBg", "Accent", "AccentStrong",
+    "WindowBg", "GroupboxBg", "ElementBg", "SubBoxBg",
+    "Accent", "AccentStrong",
+    "Border",
     "TextPrimary", "TextSecondary", "TextMuted",
 }
 local ALPHA_KEYS = { "WindowBgAlpha", "AccentAlpha" }
@@ -89,60 +91,20 @@ Themes.Sunset = {
     TextMuted     = Color3.fromRGB(100, 65,  55),
 }
 
-local function c2s(c)
-    return math.floor(c.R*255+.5)..","..math.floor(c.G*255+.5)..","..math.floor(c.B*255+.5)
-end
-
-local function repaintTree(root, oldMap, newTheme)
-    local props = { "BackgroundColor3", "TextColor3", "ImageColor3" }
-    local stack = { root }
-    while #stack > 0 do
-        local inst = table.remove(stack)
-        pcall(function()
-            for _, p in ipairs(props) do
-                local ok, v = pcall(function() return inst[p] end)
-                if ok and typeof(v) == "Color3" then
-                    local key = oldMap[c2s(v)]
-                    if key and newTheme[key] then
-                        pcall(function() inst[p] = newTheme[key] end)
-                    end
-                end
-            end
-            local sk = inst:FindFirstChildOfClass("UIStroke")
-            if sk then
-                local ok, v = pcall(function() return sk.Color end)
-                if ok and typeof(v) == "Color3" then
-                    local key = oldMap[c2s(v)]
-                    if key and newTheme[key] then
-                        pcall(function() sk.Color = newTheme[key] end)
-                    end
-                end
-            end
-        end)
-        for _, child in ipairs(inst:GetChildren()) do
-            stack[#stack+1] = child
+local function applyBindings(newTheme)
+    local bindings = AxiUI._themeBindings
+    local i = 1
+    while i <= #bindings do
+        local b = bindings[i]
+        local alive = pcall(function() return b.inst.Parent end)
+        if alive and b.inst.Parent ~= nil then
+            local v = newTheme[b.key]
+            if v then pcall(function() b.inst[b.prop] = v end) end
+            i = i + 1
+        else
+            table.remove(bindings, i)
         end
     end
-end
-
-local function scanAndRepaint(oldMap, newTheme)
-    for _, win in ipairs(AxiUI.Windows) do
-        pcall(repaintTree, win.Gui, oldMap, newTheme)
-    end
-    local function tryParent(p)
-        if not p then return end
-        for _, c in ipairs(p:GetChildren()) do
-            if c.Name:sub(1, 5) == "AxiUI" then
-                pcall(repaintTree, c, oldMap, newTheme)
-            end
-        end
-    end
-    pcall(tryParent, typeof(gethui) == "function" and gethui() or nil)
-    pcall(tryParent, game:GetService("CoreGui"))
-    pcall(function()
-        local lp = game:GetService("Players").LocalPlayer
-        if lp then tryParent(lp.PlayerGui) end
-    end)
 end
 
 -- Theme Manager
@@ -171,12 +133,6 @@ function ThemeManager:Apply(name)
     local t = self._themes[name]
     if not t then return end
 
-    local oldMap = {}
-    for _, k in ipairs(COLOR_KEYS) do
-        local v = T[k]
-        if typeof(v) == "Color3" then oldMap[c2s(v)] = k end
-    end
-
     for _, k in ipairs(COLOR_KEYS) do
         if t[k] then T[k] = t[k] end
     end
@@ -184,7 +140,7 @@ function ThemeManager:Apply(name)
         if t[k] then T[k] = t[k] end
     end
 
-    scanAndRepaint(oldMap, T)
+    applyBindings(T)
 
     self._current = name
     for _, fn in ipairs(self._listeners) do pcall(fn, name) end

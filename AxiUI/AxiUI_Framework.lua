@@ -36,6 +36,13 @@ local RunSvc    = game:GetService("RunService")
 -- Internal Helpers
 local T = AxiUI.Theme  -- live reference; mutates with SetTheme
 
+AxiUI._themeBindings = {}
+
+local function TC(inst, prop, key)
+    inst[prop] = T[key]
+    AxiUI._themeBindings[#AxiUI._themeBindings + 1] = { inst = inst, prop = prop, key = key }
+end
+
 local function Tween(obj, props, t, style)
     TweenSvc:Create(obj,
         TweenInfo.new(t or 0.15, style or Enum.EasingStyle.Quart),
@@ -49,13 +56,16 @@ local function AddCorner(parent, radius)
     return c
 end
 
-local function AddStroke(parent, color, alpha, thickness)
+local function AddStroke(parent, color, alpha, thickness, colorKey)
     local s = Instance.new("UIStroke")
     s.Color           = color or T.Border
     s.Transparency    = 1 - (alpha or T.BorderAlpha)
     s.Thickness       = thickness or 1
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     s.Parent          = parent
+    if colorKey then
+        AxiUI._themeBindings[#AxiUI._themeBindings + 1] = { inst = s, prop = "Color", key = colorKey }
+    end
     return s
 end
 
@@ -83,7 +93,7 @@ local function AddPad(parent, all, t, b, l, r)
     return p
 end
 
-local function MakeLabel(parent, text, size, color, xAlign, font)
+local function MakeLabel(parent, text, size, color, xAlign, font, colorKey)
     local l = Instance.new("TextLabel")
     l.Text                  = text or ""
     local baseFont = font or Enum.Font.GothamMedium
@@ -95,18 +105,21 @@ local function MakeLabel(parent, text, size, color, xAlign, font)
     l.TextXAlignment        = xAlign or Enum.TextXAlignment.Left
     l.TextTruncate          = Enum.TextTruncate.AtEnd
     l.Parent                = parent
+    if colorKey then
+        AxiUI._themeBindings[#AxiUI._themeBindings + 1] = { inst = l, prop = "TextColor3", key = colorKey }
+    end
     return l
 end
 
 local function MakeElementRow(parent, height)
     local row = Instance.new("Frame")
-    row.BackgroundColor3      = T.ElementBg
+    TC(row, "BackgroundColor3", "ElementBg")
     row.BackgroundTransparency = 1 - T.ElementBgAlpha
     row.BorderSizePixel       = 0
     row.Size                  = UDim2.new(1, 0, 0, height or 30)
     row.Parent                = parent
     AddCorner(row, T.RadiusElement)
-    AddStroke(row)
+    AddStroke(row, T.Border, T.BorderAlpha, 1, "Border")
     return row
 end
 
@@ -174,7 +187,7 @@ local function BuildColourPopup(anchor, initColor, onChange, onClose)
     local as = anchor.AbsoluteSize
 
     local popup = Instance.new("Frame")
-    popup.BackgroundColor3      = T.WindowBg
+    TC(popup, "BackgroundColor3", "WindowBg")
     popup.BackgroundTransparency = 0.04
     popup.BorderSizePixel       = 0
     popup.Size                  = UDim2.fromOffset(W, SVH + HUEH + 46)
@@ -182,7 +195,7 @@ local function BuildColourPopup(anchor, initColor, onChange, onClose)
     popup.ZIndex                = 99
     popup.Parent                = sg
     AddCorner(popup, UDim.new(0,8))
-    AddStroke(popup, T.Border, 0.12)
+    AddStroke(popup, T.Border, 0.12, 1, "Border")
     AddPad(popup, 8)
     AddList(popup, 6)
 
@@ -284,8 +297,8 @@ local function BuildColourPopup(anchor, initColor, onChange, onClose)
     hexBox.Size             = UDim2.new(1,-32,1,0)
     hexBox.Font             = Enum.Font.Code
     hexBox.TextSize         = 12
-    hexBox.TextColor3       = T.TextPrimary
-    hexBox.PlaceholderColor3 = T.TextMuted
+    TC(hexBox, "TextColor3", "TextPrimary")
+    TC(hexBox, "PlaceholderColor3", "TextMuted")
     hexBox.PlaceholderText  = "RRGGBB"
     hexBox.BackgroundColor3 = Color3.fromRGB(255,255,255)
     hexBox.BackgroundTransparency = 0.95
@@ -302,7 +315,7 @@ local function BuildColourPopup(anchor, initColor, onChange, onClose)
     swatch.ZIndex           = 101
     swatch.Parent           = hexRow
     AddCorner(swatch, UDim.new(0,4))
-    AddStroke(swatch, T.Border, 0.12)
+    AddStroke(swatch, T.Border, 0.12, 1, "Border")
 
     local function refreshUI()
         local c = Color3.fromHSV(h,s,v)
@@ -397,17 +410,17 @@ function AxiUI:Notify(title, message, duration)
     duration = duration or 4
 
     local card = Instance.new("Frame")
-    card.BackgroundColor3       = T.WindowBg
+    TC(card, "BackgroundColor3", "WindowBg")
     card.BackgroundTransparency = 1 - 0.88
     card.BorderSizePixel        = 0
     card.Size                   = UDim2.new(1, 0, 0, 0)
     card.AutomaticSize          = Enum.AutomaticSize.Y
     card.Parent                 = _notifHolder
     AddCorner(card, UDim.new(0, 7))
-    local stroke = AddStroke(card, T.Accent, 0.22)
+    local stroke = AddStroke(card, T.Accent, 0.22, 1, "Accent")
 
     local accentBar = Instance.new("Frame")
-    accentBar.BackgroundColor3 = T.AccentStrong
+    TC(accentBar, "BackgroundColor3", "AccentStrong")
     accentBar.BorderSizePixel  = 0
     accentBar.Size             = UDim2.fromOffset(3, 0)
     accentBar.Position         = UDim2.fromOffset(0, 5)
@@ -425,10 +438,10 @@ function AxiUI:Notify(title, message, duration)
     AddPad(body, 0, 6, 0, 0)
 
     local titleL = MakeLabel(body, title or "Notification", 11, T.AccentStrong,
-        Enum.TextXAlignment.Left, Enum.Font.GothamBold)
+        Enum.TextXAlignment.Left, Enum.Font.GothamBold, "AccentStrong")
     titleL.Size = UDim2.new(1, 0, 0, 14)
 
-    local msgL = MakeLabel(body, message or "", 10, T.TextSecondary)
+    local msgL = MakeLabel(body, message or "", 10, T.TextSecondary, nil, nil, "TextSecondary")
     msgL.Size         = UDim2.new(1, 0, 0, 0)
     msgL.AutomaticSize = Enum.AutomaticSize.Y
     msgL.TextWrapped  = true
@@ -479,13 +492,13 @@ function AxiUI:CreateWindow(options)
     frame.Position               = options.Position or UDim2.fromOffset(
         math.floor(_vp.X / 2 - w / 2), math.floor(_vp.Y / 2 - h / 2)
     )
-    frame.BackgroundColor3       = T.WindowBg
+    TC(frame, "BackgroundColor3", "WindowBg")
     frame.BackgroundTransparency = 1 - T.WindowBgAlpha
     frame.BorderSizePixel        = 0
     frame.ClipsDescendants       = true
     frame.Parent                 = gui
     AddCorner(frame, T.RadiusWindow)
-    AddStroke(frame, T.Border, 0.10, 1)
+    AddStroke(frame, T.Border, 0.10, 1, "Border")
 
     win.Frame = frame
     win.Gui   = gui
@@ -566,14 +579,14 @@ function AxiUI:_BuildTitleBar()
     local div = Instance.new("Frame")
     div.Size                   = UDim2.new(1,0,0,1)
     div.Position               = UDim2.new(0,0,1,-1)
-    div.BackgroundColor3       = T.Border
+    TC(div, "BackgroundColor3", "Border")
     div.BackgroundTransparency = 1 - T.BorderAlpha
     div.BorderSizePixel        = 0
     div.Parent                 = bar
 
 
     local title = MakeLabel(bar, self.Title:upper(), 9, T.TextMuted,
-        Enum.TextXAlignment.Left, Enum.Font.GothamMedium)
+        Enum.TextXAlignment.Left, Enum.Font.GothamMedium, "TextMuted")
     title.Size     = UDim2.new(1, -52, 1, 0)
     title.Position = UDim2.fromOffset(14, 0)
 
@@ -584,7 +597,7 @@ function AxiUI:_BuildTitleBar()
     closeBtn.AutoButtonColor        = false
     closeBtn.Font                   = Enum.Font.GothamBold
     closeBtn.TextSize               = 17
-    closeBtn.TextColor3             = T.TextMuted
+    TC(closeBtn, "TextColor3", "TextMuted")
     closeBtn.Text                   = "×"
     closeBtn.Parent                 = bar
     closeBtn.MouseEnter:Connect(function() Tween(closeBtn, { TextColor3 = T.TextPrimary }, 0.12) end)
@@ -607,7 +620,7 @@ function AxiUI:_BuildTabRow()
     row.Name                      = "TabRow"
     row.Size                      = UDim2.new(0, self.SidebarWidth, 1, -topY)
     row.Position                  = UDim2.fromOffset(0, topY)
-    row.BackgroundColor3          = T.GroupboxBg
+    TC(row, "BackgroundColor3", "GroupboxBg")
     row.BackgroundTransparency    = 1 - T.GroupboxBgAlpha
     row.BorderSizePixel           = 0
     row.ScrollBarThickness        = 0
@@ -624,7 +637,7 @@ function AxiUI:_BuildTabRow()
     div.Name                   = "TabRowDivider"
     div.Size                   = UDim2.new(0, 1, 1, -topY)
     div.Position               = UDim2.new(0, self.SidebarWidth, 0, topY)
-    div.BackgroundColor3       = T.Border
+    TC(div, "BackgroundColor3", "Border")
     div.BackgroundTransparency = 1 - T.BorderAlpha
     div.BorderSizePixel        = 0
     div.Parent                 = self.Frame
@@ -711,7 +724,7 @@ function AxiUI:AddTab(name, options)
     AddCorner(btn, UDim.new(0, 6))
 
     local nameLbl = MakeLabel(btn, name, 13, T.TextMuted,
-        Enum.TextXAlignment.Left, Enum.Font.GothamMedium)
+        Enum.TextXAlignment.Left, Enum.Font.GothamMedium, "TextMuted")
     nameLbl.Size     = UDim2.new(1, -28, 1, 0)
     nameLbl.Position = UDim2.fromOffset(14, 0)
 
@@ -720,7 +733,7 @@ function AxiUI:AddTab(name, options)
     scroll.BackgroundTransparency   = 1
     scroll.BorderSizePixel          = 0
     scroll.ScrollBarThickness       = 3
-    scroll.ScrollBarImageColor3     = T.Accent
+    TC(scroll, "ScrollBarImageColor3", "Accent")
     scroll.ScrollBarImageTransparency = 0.55
     scroll.CanvasSize               = UDim2.new(0,0,0,0)
     scroll.Visible                  = false
@@ -772,7 +785,7 @@ end
 local Groupbox = {}
 Groupbox.__index = Groupbox
 
-local function BuildGroupbox(parent, name, bgColor, bgAlpha, radius, strokeAlpha)
+local function BuildGroupbox(parent, name, bgKey, bgAlpha, radius, strokeAlpha)
     local gb        = setmetatable({}, Groupbox)
     gb.Open         = true
 
@@ -780,12 +793,12 @@ local function BuildGroupbox(parent, name, bgColor, bgAlpha, radius, strokeAlpha
     container.Name                  = "GB_" .. (name or "sub")
     container.Size                  = UDim2.new(1,0,0,0)
     container.AutomaticSize         = Enum.AutomaticSize.Y
-    container.BackgroundColor3      = bgColor
+    TC(container, "BackgroundColor3", bgKey)
     container.BackgroundTransparency = 1 - bgAlpha
     container.BorderSizePixel       = 0
     container.Parent                = parent
     AddCorner(container, radius)
-    AddStroke(container, T.Border, strokeAlpha or T.BorderAlpha)
+    AddStroke(container, T.Border, strokeAlpha or T.BorderAlpha, 1, "Border")
 
     local header = Instance.new("TextButton")
     header.Name                   = "Header"
@@ -807,18 +820,18 @@ local function BuildGroupbox(parent, name, bgColor, bgAlpha, radius, strokeAlpha
     hdrFill.Parent                 = header
 
     local hdrLbl = MakeLabel(header, (name or ""):upper(), 10, T.TextMuted,
-        Enum.TextXAlignment.Left, Enum.Font.GothamBold)
+        Enum.TextXAlignment.Left, Enum.Font.GothamBold, "TextMuted")
     hdrLbl.Size     = UDim2.new(1,-28,1,0)
     hdrLbl.Position = UDim2.fromOffset(10,0)
 
-    local chevron = MakeLabel(header, "−", 13, T.TextMuted, Enum.TextXAlignment.Center)
+    local chevron = MakeLabel(header, "−", 13, T.TextMuted, Enum.TextXAlignment.Center, nil, "TextMuted")
     chevron.Size     = UDim2.fromOffset(20,28)
     chevron.Position = UDim2.new(1,-24,0,0)
 
     local hdrDiv = Instance.new("Frame")
     hdrDiv.Size                   = UDim2.new(1,0,0,1)
     hdrDiv.Position               = UDim2.new(0,0,1,-1)
-    hdrDiv.BackgroundColor3       = T.Border
+    TC(hdrDiv, "BackgroundColor3", "Border")
     hdrDiv.BackgroundTransparency = 1 - (strokeAlpha or T.BorderAlpha)
     hdrDiv.BorderSizePixel        = 0
     hdrDiv.Parent                 = header
@@ -850,7 +863,7 @@ end
 function Tab:AddGroupbox(name, options)
     options = options or {}
     local gb = BuildGroupbox(self.Scroll, name,
-        T.GroupboxBg, T.GroupboxBgAlpha, T.RadiusGroupbox)
+        "GroupboxBg", T.GroupboxBgAlpha, T.RadiusGroupbox)
     table.insert(self.Groupboxes, gb)
     return gb
 end
@@ -871,10 +884,10 @@ function Groupbox:AddToggle(key, opts)
     lFrame.Parent                 = row
     AddList(lFrame, 1)
 
-    local lbl = MakeLabel(lFrame, opts.Text or key, 11, T.TextSecondary)
+    local lbl = MakeLabel(lFrame, opts.Text or key, 11, T.TextSecondary, nil, nil, "TextSecondary")
     lbl.Size = UDim2.new(1,0,0,16)
     if opts.Tooltip then
-        local sub = MakeLabel(lFrame, opts.Tooltip, 9, T.TextMuted)
+        local sub = MakeLabel(lFrame, opts.Tooltip, 9, T.TextMuted, nil, nil, "TextMuted")
         sub.Size = UDim2.new(1,0,0,11)
     end
 
@@ -887,7 +900,7 @@ function Groupbox:AddToggle(key, opts)
     pill.BorderSizePixel  = 0
     pill.Parent           = row
     AddCorner(pill, T.RadiusPill)
-    AddStroke(pill, T.Border, 0.12)
+    AddStroke(pill, T.Border, 0.12, 1, "Border")
 
     local thumb = Instance.new("Frame")
     thumb.Size             = UDim2.fromOffset(11,11)
@@ -935,7 +948,7 @@ function Groupbox:AddButton(opts)
     btn.Position              = UDim2.fromOffset(8,4)
     btn.Font                  = Enum.Font.GothamBold
     btn.TextSize              = 13
-    btn.TextColor3            = T.TextSecondary
+    TC(btn, "TextColor3", "TextSecondary")
     btn.Text                  = opts.Text or "Button"
     btn.BackgroundColor3      = Color3.fromRGB(255,255,255)
     btn.BackgroundTransparency = 0.945
@@ -943,7 +956,7 @@ function Groupbox:AddButton(opts)
     btn.AutoButtonColor       = false
     btn.Parent                = row
     AddCorner(btn, UDim.new(0,5))
-    AddStroke(btn, T.Border, 0.09)
+    AddStroke(btn, T.Border, 0.09, 1, "Border")
 
     btn.MouseEnter:Connect(function()
         Tween(btn, { BackgroundTransparency = 0.88, TextColor3 = T.TextPrimary }, 0.1)
@@ -968,12 +981,12 @@ function Groupbox:AddSlider(key, opts)
 
     local row = MakeElementRow(self.Body)
 
-    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary)
+    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary, nil, nil, "TextSecondary")
     lbl.Size     = UDim2.new(0.55,-10,1,0)
     lbl.Position = UDim2.fromOffset(9,0)
 
     local valLbl = MakeLabel(row, tostring(def) .. suffix, 10, T.Accent,
-        Enum.TextXAlignment.Right)
+        Enum.TextXAlignment.Right, nil, "Accent")
     valLbl.Size     = UDim2.fromOffset(30,30)
     valLbl.Position = UDim2.new(1,-38,0,0)
 
@@ -996,7 +1009,7 @@ function Groupbox:AddSlider(key, opts)
     AddCorner(trackBar, UDim.new(1, 0))
 
     local fill = Instance.new("Frame")
-    fill.BackgroundColor3       = T.Accent
+    TC(fill, "BackgroundColor3", "Accent")
     fill.BackgroundTransparency = 1 - 0.62
     fill.BorderSizePixel        = 0
     fill.Size                   = UDim2.fromScale(0, 1)
@@ -1007,11 +1020,11 @@ function Groupbox:AddSlider(key, opts)
     thumb.Size             = UDim2.fromOffset(11, 11)
     thumb.AnchorPoint      = Vector2.new(0.5, 0.5)
     thumb.Position         = UDim2.new(0, 0, 0.5, 0)
-    thumb.BackgroundColor3 = T.AccentStrong
+    TC(thumb, "BackgroundColor3", "AccentStrong")
     thumb.BorderSizePixel  = 0
     thumb.Parent           = track
     AddCorner(thumb, UDim.new(1, 0))
-    AddStroke(thumb, T.Border, 0.2)
+    AddStroke(thumb, T.Border, 0.2, 1, "Border")
 
     local function SetSlider(val)
         if rounding then val = math.round(val) end
@@ -1057,15 +1070,15 @@ function Groupbox:AddDropdown(key, opts)
 
     local row = MakeElementRow(self.Body)
 
-    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary)
+    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary, nil, nil, "TextSecondary")
     lbl.Size     = UDim2.new(0.48,0,1,0)
     lbl.Position = UDim2.fromOffset(9,0)
 
-    local selLbl = MakeLabel(row, default, 10, T.Accent, Enum.TextXAlignment.Right)
+    local selLbl = MakeLabel(row, default, 10, T.Accent, Enum.TextXAlignment.Right, nil, "Accent")
     selLbl.Size     = UDim2.new(0.44,0,1,0)
     selLbl.Position = UDim2.new(0.5,0,0,0)
 
-    local chevLbl = MakeLabel(row, "▾", 11, T.TextMuted, Enum.TextXAlignment.Center)
+    local chevLbl = MakeLabel(row, "▾", 11, T.TextMuted, Enum.TextXAlignment.Center, nil, "TextMuted")
     chevLbl.Size     = UDim2.fromOffset(16,30)
     chevLbl.Position = UDim2.new(1,-18,0,0)
 
@@ -1096,7 +1109,7 @@ function Groupbox:AddDropdown(key, opts)
         overlayBtn = MakeOverlay(CloseDD)
 
         popupFrame = Instance.new("Frame")
-        popupFrame.BackgroundColor3      = T.WindowBg
+        TC(popupFrame, "BackgroundColor3", "WindowBg")
         popupFrame.BackgroundTransparency = 0.04
         popupFrame.BorderSizePixel       = 0
         popupFrame.Size                  = UDim2.fromOffset(as.X, 0)
@@ -1105,13 +1118,13 @@ function Groupbox:AddDropdown(key, opts)
         popupFrame.ZIndex                = 99
         popupFrame.Parent                = sg
         AddCorner(popupFrame, UDim.new(0,6))
-        AddStroke(popupFrame, T.Border, 0.12)
+        AddStroke(popupFrame, T.Border, 0.12, 1, "Border")
 
         local listScroll = Instance.new("ScrollingFrame")
         listScroll.BackgroundTransparency = 1
         listScroll.BorderSizePixel        = 0
         listScroll.ScrollBarThickness     = 2
-        listScroll.ScrollBarImageColor3   = T.Accent
+        TC(listScroll, "ScrollBarImageColor3", "Accent")
         listScroll.CanvasSize             = UDim2.new(0,0,0,0)
         listScroll.AutomaticCanvasSize    = Enum.AutomaticSize.Y
         listScroll.Size                   = UDim2.new(1,0,0, math.min(#items * 26 + 8, 160))
@@ -1164,7 +1177,7 @@ function Groupbox:AddInput(key, opts)
 
     local row = MakeElementRow(self.Body, 44)  -- MakeElementRow already adds UIStroke
 
-    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary)
+    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary, nil, nil, "TextSecondary")
     lbl.Size     = UDim2.new(1,-16,0,16)
     lbl.Position = UDim2.fromOffset(9,4)
 
@@ -1175,8 +1188,8 @@ function Groupbox:AddInput(key, opts)
     box.PlaceholderText   = opts.Placeholder or "..."
     box.Font              = Enum.Font.GothamBold
     box.TextSize          = 12
-    box.TextColor3        = T.TextPrimary
-    box.PlaceholderColor3 = T.TextMuted
+    TC(box, "TextColor3", "TextPrimary")
+    TC(box, "PlaceholderColor3", "TextMuted")
     box.BackgroundColor3  = Color3.fromRGB(255,255,255)
     box.BackgroundTransparency = 0.955
     box.BorderSizePixel   = 0
@@ -1184,7 +1197,7 @@ function Groupbox:AddInput(key, opts)
     box.ClearTextOnFocus  = false
     box.Parent            = row
     AddCorner(box, UDim.new(0,4))
-    AddStroke(box, T.Border, 0.12)
+    AddStroke(box, T.Border, 0.12, 1, "Border")
     AddPad(box, nil, 0,0, 6,0)
 
     local numeric  = opts.Numeric == true
@@ -1226,7 +1239,7 @@ function Groupbox:AddKeybind(key, opts)
 
     local row = MakeElementRow(self.Body)
 
-    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary)
+    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary, nil, nil, "TextSecondary")
     lbl.Size     = UDim2.new(0.58,0,1,0)
     lbl.Position = UDim2.fromOffset(9,0)
 
@@ -1236,7 +1249,7 @@ function Groupbox:AddKeybind(key, opts)
     pill.Position              = UDim2.new(1,-9,0.5,0)
     pill.Font                  = Enum.Font.GothamBold
     pill.TextSize              = 11
-    pill.TextColor3            = T.Accent
+    TC(pill, "TextColor3", "Accent")
     pill.Text                  = currentKey == Enum.KeyCode.Unknown and "None" or currentKey.Name
     pill.BackgroundColor3      = Color3.fromRGB(52,48,44)
     pill.BackgroundTransparency = 0.2
@@ -1244,7 +1257,7 @@ function Groupbox:AddKeybind(key, opts)
     pill.AutoButtonColor       = false
     pill.Parent                = row
     AddCorner(pill, UDim.new(0,4))
-    AddStroke(pill, T.Accent, 0.42)
+    AddStroke(pill, T.Accent, 0.42, 1, "Accent")
 
     local listening = false
     pill.MouseButton1Click:Connect(function()
@@ -1286,7 +1299,7 @@ function Groupbox:AddColorPicker(key, opts)
 
     local row = MakeElementRow(self.Body)
 
-    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary)
+    local lbl = MakeLabel(row, opts.Text or key, 11, T.TextSecondary, nil, nil, "TextSecondary")
     lbl.Size     = UDim2.new(1,-54,1,0)
     lbl.Position = UDim2.fromOffset(9,0)
 
@@ -1300,7 +1313,7 @@ function Groupbox:AddColorPicker(key, opts)
     swatch.BorderSizePixel  = 0
     swatch.Parent           = row
     AddCorner(swatch, UDim.new(0,4))
-    AddStroke(swatch, T.Border, 0.14)
+    AddStroke(swatch, T.Border, 0.14, 1, "Border")
 
     local popup = nil
     swatch.MouseButton1Click:Connect(function()
@@ -1337,7 +1350,8 @@ function Groupbox:AddLabel(text, opts)
 
     local lbl = MakeLabel(row, text, opts.Size or 10,
         opts.Color or T.TextMuted,
-        opts.Align or Enum.TextXAlignment.Left)
+        opts.Align or Enum.TextXAlignment.Left,
+        nil, opts.Color and nil or "TextMuted")
     lbl.Size        = UDim2.new(1,-16,0,0)
     lbl.Position    = UDim2.fromOffset(8,0)
     lbl.TextWrapped = true
@@ -1347,7 +1361,7 @@ end
 
 function Groupbox:AddDivider()
     local div = Instance.new("Frame")
-    div.BackgroundColor3      = T.Border
+    TC(div, "BackgroundColor3", "Border")
     div.BackgroundTransparency = 1 - T.BorderAlpha
     div.BorderSizePixel        = 0
     div.Size                   = UDim2.new(1,-16,0,1)
@@ -1357,7 +1371,7 @@ end
 
 function Groupbox:AddSubBox(name)
     return BuildGroupbox(self.Body, name,
-        T.SubBoxBg, T.SubBoxBgAlpha, T.RadiusSubBox, 0.055)
+        "SubBoxBg", T.SubBoxBgAlpha, T.RadiusSubBox, 0.055)
 end
 
 function AxiUI:SetTheme(overrides)
@@ -1420,9 +1434,10 @@ function AxiUI:Unload()
     end
     if _popupSG  then pcall(function() _popupSG:Destroy()  end); _popupSG  = nil end
     if _notifSG  then pcall(function() _notifSG:Destroy()  end); _notifSG  = nil end
-    self.Windows     = {}
-    self.Flags       = {}
-    self.Connections = {}
+    self.Windows      = {}
+    self.Flags        = {}
+    self.Connections  = {}
+    self._themeBindings = {}
     if self.OnUnload then pcall(self.OnUnload) end
 end
 
