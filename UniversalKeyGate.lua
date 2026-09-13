@@ -1,50 +1,3 @@
---[[
-    Universal Key Gate — Dashboard edition (Superdesign port)
-
-    THE loader every script (Finite included) should load from — not a
-    per-script loader. Enter a key, and the finite-log-proxy Worker (1)
-    checks the key, (2) resolves game.PlaceId to whichever script that game
-    maps to, (3) returns that script only if the key is valid for it. No
-    PlaceId -> script table exists anywhere in this file, or in any client
-    code at all — that mapping lives entirely server-side.
-
-    All Worker communication is delegated to the shared keyauth.lua module
-    — this file only builds the UI around it. No local HTTP bridge, no
-    local JSON handling, no local validity decision.
-
-    Visual layout is adapted from the approved Superdesign draft (project
-    a5fec5c4-e974-4aa2-bd8d-b515445af6bc, draft
-    3b670ab9-0f77-4b59-b00f-18d2bd4e7078, "Optimized Compact Dashboard UI"):
-    near-black glass window, a Dashboard landing tab that also hosts the
-    Authorization Overview (key entry, or once authenticated, a live
-    tier/expiry readout -- two mutually-exclusive states, never both at
-    once), Performance as icon-rows, and a live Info list with
-    copy-to-clipboard. There is no separate License tab -- consolidating
-    onto Dashboard keeps the sidebar to functional categories only and
-    removes any chance of it highlighting a tab that doesn't match what's
-    on screen. Adapted, not pixel-copied, where Roblox UI primitives don't
-    have a CSS/Tailwind equivalent (no icon font, so colored circles/
-    letters stand in for lucide icons; Settings keeps AxiUI's own real
-    ThemeManager functionality rather than the mockup's illustrative,
-    non-functional Save/Reset).
-
-    AxiUI is a fork (axiui-keygate/AxiUI/, not ScriptB/Universal-Scripts),
-    edited directly: macOS dots removed at the source, a native left
-    sidebar with per-tab badge colors, a self-tracking AxiUI:AddShadow so a
-    shadow can never desync from the window it's shadowing, and
-    CreateWindow's HeaderHeight/SidebarWidth options so this file doesn't
-    have to reposition TabRow/ContentArea by hand.
-
-    Entire construction is wrapped in pcall so a future bug fails loud (one
-    warn(), nothing built) instead of silently killing the whole script
-    partway through with no explanation.
-
-    Load:
-        loadstring(game:HttpGet(
-            "https://raw.githubusercontent.com/ScriptB/axiui-keygate/main/UniversalKeyGate.lua"
-        ))()
-]]
-
 local ok, err = pcall(function()
 
 local Players     = game:GetService("Players")
@@ -57,9 +10,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local setclipboard = setclipboard or function(text) print("[Clipboard]", text) end
 
--- Real background blur (DepthOfFieldEffect), confirmed against Roblox's own
--- docs. Toggled on only while the window itself is open, not while
--- minimized to the orb.
+
 local BlurEffect = Instance.new("DepthOfFieldEffect")
 BlurEffect.Name          = "UniversalKeyGate_Blur"
 BlurEffect.FocusDistance = 2
@@ -80,9 +31,6 @@ local function SetBlur(on)
     end
 end
 
--- ══════════════════════════════════════════════════════════════
---  LOAD KEYAUTH
--- ══════════════════════════════════════════════════════════════
 local KEYAUTH_MODULE_URL = "https://finite-log-proxy.asuneteric.workers.dev/keyauth.lua"
 
 local KeyAuth = loadstring(game:HttpGet(KEYAUTH_MODULE_URL))()
@@ -109,37 +57,19 @@ local function RunPayload(source)
     end
 end
 
--- ══════════════════════════════════════════════════════════════
---  LOAD AXIUI (fork) + THEME
--- ══════════════════════════════════════════════════════════════
 local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/axiui-keygate/main/AxiUI/"
 
 local AxiUI = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_Framework.lua"))()
 local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.lua"))()
 
--- Transparency capped at 60% everywhere (Alpha = 1 - Transparency, so
--- Alpha >= 0.4 throughout this file) -- an earlier pass here regressed
--- back down to the mockup's raw, uncapped CSS opacity values (0.05/0.05/
--- 0.08 = 92-95% see-through) while porting the Superdesign draft, undoing
--- an already-fixed "everything unreadable" correction from before that.
--- GroupboxBg/ElementBg (used by AxiUI's own native Groupbox/Element
--- rendering, e.g. the Settings tab's ThemeManager UI) are a DARK tint, not
--- white -- same reasoning as PANEL_TINT below: white fill under white text
--- washes out, dark fill doesn't. Border stays white/light on purpose --
--- that's the correct "light border" half of the look, only the FILL was
--- the wrong tone.
+
 AxiUI:SetTheme({
     GroupboxBg      = Color3.fromRGB(27, 26, 24),      GroupboxBgAlpha = 0.60,
     ElementBg       = Color3.fromRGB(27, 26, 24),      ElementBgAlpha  = 0.60,
     Border          = Color3.fromRGB(255, 255, 255),   BorderAlpha     = 0.40,
 })
 
--- Near-black glass, matching the approved design's dark gradient window,
--- but shifted neutral-warm rather than blue-black -- same reasoning as
--- COLOR_DASH/PANEL_TINT above: a blue-cast dark theme plus a blue Accent
--- (toggles/sliders/dropdown highlights all read off Accent/AccentStrong,
--- so this is the framework-wide default, not just one card) is exactly
--- the generic-AI-dark-mode look, not a deliberate choice.
+
 ThemeManager:AddTheme("Glass", {
     WindowBg      = Color3.fromRGB(16, 15, 13),     WindowBgAlpha  = 0.97,
     Accent        = Color3.fromRGB(190, 160, 110),  AccentAlpha    = 0.30,
@@ -152,26 +82,11 @@ ThemeManager:Apply("Glass")
 
 local T = AxiUI.Theme
 
--- Subtle text-shadow (Roblox TextLabel/TextButton/TextBox's own built-in
--- TextStroke, not a separate UIStroke Instance -- cheaper and this is
--- literally what it's for) applied everywhere text renders, so readability
--- holds regardless of what's behind the glass at any given moment.
--- Deliberately restrained (mostly-transparent, no glow/thick outline) --
--- a readability aid, not a visual effect of its own.
+
 local TEXT_STROKE_TRANSPARENCY = 0.72
 local TEXT_STROKE_COLOR = Color3.new(0, 0, 0)
 
--- Per-tab accent colors, matching the approved design (each tab keeps its
--- own hue rather than one shared accent) -- also reused for Dashboard/Info
--- card icon tints so the same color language carries through the whole UI.
---
--- These used to be Tailwind's stock blue-400/purple-400/cyan-400/etc --
--- researched afterward and confirmed that exact trio (blue/purple/cyan
--- neon-on-dark) is *the* most commonly cited "this is AI-generated" tell,
--- traced directly to those same Tailwind defaults saturating design-tool
--- training data. Replaced with a muted, warm/neutral "material" palette
--- (brass, sage, clay, slate, sand) -- no blue, no purple, no cyan, and
--- desaturated rather than the punchy stock swatch values.
+
 local COLOR_DASH  = Color3.fromRGB(198, 165, 96)   -- brass/gold
 local COLOR_LIC   = Color3.fromRGB(133, 163, 120)  -- sage
 local COLOR_SET   = Color3.fromRGB(178, 108, 92)   -- clay/terracotta
@@ -179,23 +94,9 @@ local COLOR_PERF  = Color3.fromRGB(139, 152, 168)  -- slate
 local COLOR_INFO  = Color3.fromRGB(168, 154, 132)  -- sand
 local COLOR_BAD   = Color3.fromRGB(220, 120, 108)
 
--- Panel fill tint. Researched glassmorphism guidance is explicit that the
--- glass tint has to match the text tone: light text (our theme) needs a
--- DARK glass tint, not a white one -- a white fill at any opacity high
--- enough to be legible with no real blur behind it (Roblox has none, see
--- SetBlur's own comment) just washes out into a milky haze, which is
--- exactly what pure-white panel fills at raised opacity were doing here.
--- Dark base, slightly lighter than the window itself so panels still read
--- as a distinct raised surface. Neutral-warm charcoal, not a blue-black --
--- the old (26,29,39) had a cool blue cast (B > G > R) that reinforced the
--- same generic-AI-dark-mode look the accent colors above just moved away
--- from.
+
 local PANEL_TINT = Color3.fromRGB(27, 26, 24)
 
--- Blends PANEL_TINT toward an accent color by `amount` -- a subtly colored
--- DARK glass (the "colored tint" variant the research calls out) rather
--- than a plain neutral dark panel, for tinted cards like the License
--- status card.
 local function DarkTint(color, amount)
     amount = amount or 0.18
     return Color3.new(
@@ -205,9 +106,6 @@ local function DarkTint(color, amount)
     )
 end
 
--- ══════════════════════════════════════════════════════════════
---  WINDOW
--- ══════════════════════════════════════════════════════════════
 local SIDEBAR_W  = 160
 local CONTENT_W  = 760
 local HEADER_H   = 50
@@ -227,16 +125,10 @@ do
     Window.Frame.Position = UDim2.fromOffset(math.floor(vp.X / 2), math.floor(vp.Y / 2))
 end
 
--- Self-tracking drop shadow (see AxiUI_Framework.lua's AddShadow) -- wired
--- to Window.Frame's own Position/Size/Visible, cannot desync from it.
+
 Window:AddShadow(Window.Frame)
 
--- Diagonal glass sheen -- a UIGradient modulates Window.Frame's OWN
--- background, so it's only actually visible in the plain gaps between
--- cards (any card sitting on top masks it there), which is exactly the
--- "glass effect on the non-text, non-box parts" being asked for. Nudged
--- more visible than the original near-invisible pass (94-98.5%
--- transparent), still restrained -- a highlight, not a strong effect.
+
 do
     local sheen = Instance.new("UIGradient")
     sheen.Color = ColorSequence.new({
@@ -253,9 +145,6 @@ do
     sheen.Parent = Window.Frame
 end
 
--- ══════════════════════════════════════════════════════════════
---  CUSTOM HEADER — avatar + time-of-day greeting
--- ══════════════════════════════════════════════════════════════
 local function GetGreeting()
     local hour = DateTime.now():ToLocalTime().Hour
     local part
@@ -343,12 +232,7 @@ SubLbl.TextStrokeColor3       = TEXT_STROKE_COLOR
 SubLbl.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
 SubLbl.Parent                 = HeaderRow
 
--- The actual game name, not the raw PlaceId -- MarketplaceService's
--- GetProductInfo works for a PlaceId (a place is an asset in Roblox's
--- catalog system), confirmed against the DevForum's own accepted answer
--- before using it here. Yields (real HTTP call), so it runs on its own
--- thread same as the avatar fetch above, and is pcall-wrapped since it
--- can rate-limit/fail like any other MarketplaceService call.
+
 task.spawn(function()
     local nameOk, info = pcall(Marketplace.GetProductInfo, Marketplace, PlaceId)
     if nameOk and info and info.Name and info.Name ~= "" then
@@ -358,9 +242,6 @@ task.spawn(function()
     end
 end)
 
--- ══════════════════════════════════════════════════════════════
---  SMALL VISUAL HELPERS
--- ══════════════════════════════════════════════════════════════
 local function Panel(parent, size, position)
     local p = Instance.new("Frame")
     p.Size                   = size
@@ -375,8 +256,7 @@ local function Panel(parent, size, position)
     return p
 end
 
--- A clickable status card: icon square (or dot) + label + value, optional
--- tint color and click-through to another tab. Used across Dashboard/Info.
+
 local function StatCard(parent, opts)
     local card = Instance.new(opts.Href and "TextButton" or "Frame")
     if opts.Href then card.Text = "" ; card.AutoButtonColor = false end
@@ -428,11 +308,7 @@ local function AddIconSquare(parent, color, letter, size, pos)
     return sq
 end
 
--- Bumped up (+2 size, promoted to Bold) so every label built through this
--- helper reads bolder/larger by default, applied here rather than at each
--- of the ~50 call sites. Code font (the countdown timer, place/key IDs)
--- is deliberately left alone -- it's a monospace "readout" style, not
--- meant to look like normal bolded copy.
+
 local function Label(parent, text, size, color, pos, sz, font, align)
     local l = Instance.new("TextLabel")
     l.Size                   = sz
@@ -451,10 +327,6 @@ local function Label(parent, text, size, color, pos, sz, font, align)
     return l
 end
 
--- ══════════════════════════════════════════════════════════════
---  TOAST — small bottom-center popup, anchored to the window (not the
---  whole screen), for copy-to-clipboard feedback.
--- ══════════════════════════════════════════════════════════════
 local Toast = Instance.new("TextLabel")
 Toast.Size                   = UDim2.fromOffset(180, 34)
 Toast.AnchorPoint             = Vector2.new(0.5, 1)
@@ -488,32 +360,12 @@ local function ShowToast(msg)
     end)
 end
 
--- Forward-declared: Dashboard's cards (built below) link to Performance/
--- Info, defined later in the file. A click handler closure resolves a
--- free variable lexically at the point it's DEFINED -- without this,
--- TabPerf/TabInfo wouldn't exist as locals yet when these closures are
--- created, so they'd silently capture globals (nil) instead of the real
--- tab objects, and clicking those cards would throw inside
--- Window:_SelectTab(nil).
+
 local TabDashboard, TabSettings, TabPerf, TabInfo
 
--- ══════════════════════════════════════════════════════════════
---  DASHBOARD TAB — also houses the Authorization Overview (key entry /
---  live session + timer) directly, so all session telemetry lives on the
---  landing view. There is no separate License tab: one fewer sidebar
---  entry, and no risk of the sidebar highlighting a tab that doesn't
---  match what's on screen.
---
---  Every row below is full-width (UDim2.new(1,0,...)) so it lines up
---  edge-to-edge with every other row -- no row is ever narrower than the
---  content area and centered inside leftover space.
--- ══════════════════════════════════════════════════════════════
+
 TabDashboard = Window:AddTab("Dashboard")
 
--- ── Authorization Overview: one full-width compact row, two mutually
--- exclusive states (icon + status text on the left, the state-specific
--- controls anchored to the right edge via Scale so they stay flush
--- regardless of exact width).
 local licenseWrap = Instance.new("Frame")
 licenseWrap.Size = UDim2.new(1, 0, 0, 76)
 licenseWrap.BackgroundTransparency = 1
@@ -557,11 +409,7 @@ do
     local p = Instance.new("UIPadding"); p.PaddingLeft = UDim.new(0,10); p.PaddingRight = UDim.new(0,10); p.Parent = KeyInputBox
 end
 
--- The one true primary action in this view -- deliberately NOT the same
--- passive glass treatment as every card/panel around it (that uniform
--- translucency-on-everything is a known generic-AI-design tell). Solid,
--- dark-tinted fill + plain high-contrast text reads as a committed button
--- instead of another floating glass tile.
+
 local ValidateBtnFrame = Instance.new("TextButton")
 ValidateBtnFrame.Size = UDim2.fromOffset(122, 34)
 ValidateBtnFrame.Position = UDim2.new(1, -136, 0, 21)
@@ -601,16 +449,14 @@ do
     Label(icon, "K", 14, COLOR_LIC, UDim2.fromOffset(0,0), UDim2.new(1,0,1,0), Enum.Font.GothamBold, Enum.TextXAlignment.Center)
 end
 Label(AuthedView, "Active License", 12, T.TextPrimary, UDim2.fromOffset(60, 14), UDim2.fromOffset(220, 16), Enum.Font.GothamBold)
--- Authorization tier -- this system is single-tier today, so the label is
--- a constant, not fetched data; still surfaced explicitly so the
--- authenticated view always shows what level of access is active.
+
 Label(AuthedView, "BASIC ACCESS", 9, COLOR_LIC, UDim2.fromOffset(60, 32), UDim2.fromOffset(220, 14), Enum.Font.GothamBold)
 Label(AuthedView, "TIME REMAINING", 8, T.TextMuted, UDim2.new(1, -180, 0, 16), UDim2.fromOffset(166, 10), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
 local AuthedTimerLabel = Label(AuthedView, "", 20, T.TextPrimary, UDim2.new(1, -180, 0, 28), UDim2.fromOffset(166, 28), Enum.Font.Code, Enum.TextXAlignment.Right)
 
 local function CleanKey(s)
     s = tostring(s or "")
-    s = s:gsub("\226\128\139", "") -- zero-width space (U+200B)
+    s = s:gsub("\226\128\139", "")
     s = s:gsub("%s+", "")
     return s
 end
@@ -623,8 +469,6 @@ local function StopTimer()
     end
 end
 
--- Converts raw remaining milliseconds into HH:MM:SS, flipping to
--- "EXPIRED" once the deadline has passed.
 local function FormatRemaining(msRemaining)
     if msRemaining <= 0 then return "EXPIRED" end
     local totalSeconds = math.floor(msRemaining / 1000)
@@ -634,9 +478,7 @@ local function FormatRemaining(msRemaining)
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
--- Lightweight background loop: recomputes remaining = expiresAt - now
--- every second and refreshes the label, rather than counting down a
--- locally-cached duration (which would drift/desync from the server).
+
 local function StartTimer(expiresAt)
     StopTimer()
     if expiresAt == nil then
@@ -661,9 +503,7 @@ local function ShowAuthenticatedState(resolvedScript, expiresAt)
     StartTimer(expiresAt)
 end
 
--- ── Stats row: FPS / Ping / Memory as three equal columns via a real
--- UIListLayout (Scale-sized children), not manually computed pixel
--- offsets -- so the row always divides evenly regardless of width.
+
 local dashStatsRow = Instance.new("Frame")
 dashStatsRow.Size = UDim2.new(1, 0, 0, 74)
 dashStatsRow.BackgroundTransparency = 1
@@ -677,11 +517,7 @@ do
     layout.Parent = dashStatsRow
 end
 
--- Three real, already-computed metrics -- same color per metric as the
--- Performance tab's own rows (orange/blue/purple), not arbitrary or
--- decorative. Values are filled in by the Performance tab's task.spawn
--- loop below (dashFpsValue/dashPingValue/dashMemValue), the same pattern
--- already used for FPS.
+
 local dashFpsCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashFpsCard, COLOR_PERF, "F", 32, UDim2.fromOffset(12, 14))
 Label(dashFpsCard, "FPS", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
@@ -699,9 +535,7 @@ local dashMemValue = Label(dashMemCard, "--", 11, T.TextPrimary, UDim2.fromOffse
 
 local dashOverview = Panel(TabDashboard.Scroll, UDim2.new(1, 0, 0, 100))
 Label(dashOverview, "Quick Overview", 12, T.TextSecondary, UDim2.fromOffset(14, 12), UDim2.new(1, -28, 0, 16), Enum.Font.GothamBold)
--- Live library count -- set by RefreshInfo (Info tab, built later) off the
--- same GET /api/places/list result the Info tab itself lists, not a
--- second guess at the number.
+
 local dashLibraryCountLbl = Label(dashOverview, "Loading library…", 10, COLOR_INFO, UDim2.fromOffset(14, 32), UDim2.new(1, -28, 0, 14), Enum.Font.GothamBold)
 Label(dashOverview, "Live performance stats are on the Performance tab.", 10, T.TextMuted, UDim2.fromOffset(14, 48), UDim2.new(1, -28, 0, 14))
 local dashInfoLink = Instance.new("TextButton")
@@ -724,16 +558,11 @@ dashInfoLink.MouseLeave:Connect(function()
     TweenSvc:Create(dashInfoLink, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { TextTransparency = 0.2 }):Play()
 end)
 
--- ══════════════════════════════════════════════════════════════
---  SETTINGS TAB — real ThemeManager functionality (dropdown, rainbow
---  accent, save/load custom), not the mockup's illustrative buttons.
--- ══════════════════════════════════════════════════════════════
+
 TabSettings = Window:AddTab("Settings")
 ThemeManager:ApplyToTab(TabSettings)
 
--- ══════════════════════════════════════════════════════════════
---  PERFORMANCE TAB — icon rows (FPS / Ping / Memory)
--- ══════════════════════════════════════════════════════════════
+
 TabPerf = Window:AddTab("Performance")
 
 local function PerfRow(color, letter)
@@ -773,9 +602,7 @@ task.spawn(function()
     end
 end)
 
--- ══════════════════════════════════════════════════════════════
---  INFO TAB — live from the Worker, never a hardcoded/phantom list.
--- ══════════════════════════════════════════════════════════════
+
 TabInfo = Window:AddTab("Info")
 
 Label(TabInfo.Scroll, "Supported Games", 12, T.TextPrimary, UDim2.fromOffset(0,0), UDim2.new(1,0,0,16), Enum.Font.GothamBold)
@@ -791,12 +618,7 @@ local function ClearInfoEntries()
 end
 
 local function AddInfoRow(place)
-    -- Never permanently shows a raw PlaceId as the name -- if the Worker
-    -- has no admin-set displayName for this mapping, fetch the real game
-    -- name via MarketplaceService (a Place is an asset in Roblox's
-    -- catalog, so GetProductInfo works on a PlaceId; confirmed against
-    -- the DevForum's accepted answer before using it). "Place <id>" is
-    -- only ever a brief placeholder while that fetch is in flight.
+ 
     local hasDisplayName = place.displayName ~= nil
     local label = place.displayName or ("Place " .. tostring(place.placeId))
     local row = Instance.new("TextButton")
@@ -883,9 +705,6 @@ end
 
 task.spawn(RefreshInfo)
 
--- ══════════════════════════════════════════════════════════════
---  CLOSE / REOPEN — closes with an animation to a small draggable orb.
--- ══════════════════════════════════════════════════════════════
 local ReopenOrb = nil
 local ReopenWindow
 
@@ -1004,16 +823,8 @@ local function CloseToOrb()
     end)
 end
 
--- Wires the title bar's close button (added at the fork level) to the
--- same minimize-to-orb animation used everywhere else the window closes
--- -- without this, removing the macOS dots left no way to close the
--- window at all once it's been reopened from the orb (the auto-close
--- only ever fires once, right after a fresh key validates).
 Window.OnClose = CloseToOrb
 
--- ══════════════════════════════════════════════════════════════
---  AUTH SUCCESS
--- ══════════════════════════════════════════════════════════════
 local function OnLoadStage(key)
     local fetchOk, source = KeyAuth.FetchScriptForPlace(PlaceId, key)
     if not fetchOk then
@@ -1041,9 +852,6 @@ local function OnAuthenticated(key, resolvedScript, expiresAt, skipOpenAnimation
     end
 end
 
--- ══════════════════════════════════════════════════════════════
---  KEY VALIDATION — fresh entry path
--- ══════════════════════════════════════════════════════════════
 local function Shake(frame)
     local base = frame.Position
     local seq = {
@@ -1089,10 +897,6 @@ end
 
 ValidateBtnFrame.MouseButton1Click:Connect(SubmitKey)
 
--- ══════════════════════════════════════════════════════════════
---  SILENT PATH — a cached key from a previous validated run in THIS exact
---  game, still valid right now.
--- ══════════════════════════════════════════════════════════════
 local function TrySilentLoad()
     local cachedKey, cachedUserId = KeyAuth.LoadCachedKey(CACHE_FILE)
     if not cachedKey or cachedUserId ~= tostring(LocalPlayer.UserId) then
@@ -1106,10 +910,7 @@ local function TrySilentLoad()
     return true
 end
 
--- Invisible from the very start -- TrySilentLoad's VerifyForPlace call is a
--- real network round-trip, and without this the raw window would flash on
--- screen for that duration before OnAuthenticated ever gets a chance to
--- hide it.
+
 Window.Frame.Visible = false
 
 if not TrySilentLoad() then
