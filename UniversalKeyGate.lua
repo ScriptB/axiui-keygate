@@ -314,8 +314,7 @@ local function Label(parent, text, size, color, pos, sz, font, align)
     l.Size                   = sz
     l.Position               = pos
     l.BackgroundTransparency = 1
-    local baseFont = font or Enum.Font.Gotham
-    l.Font                   = (baseFont == Enum.Font.Code) and baseFont or Enum.Font.GothamBold
+    l.Font                   = font or Enum.Font.Gotham
     l.TextSize               = size + 2
     l.TextColor3             = color
     l.TextXAlignment          = align or Enum.TextXAlignment.Left
@@ -365,6 +364,13 @@ local TabDashboard, TabSettings, TabPerf, TabInfo
 
 
 TabDashboard = Window:AddTab("Dashboard")
+do
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.Padding = UDim.new(0, 10)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = TabDashboard.Scroll
+end
 
 local licenseWrap = Instance.new("Frame")
 licenseWrap.Size = UDim2.new(1, 0, 0, 76)
@@ -450,8 +456,8 @@ do
 end
 Label(AuthedView, "Active License", 12, T.TextPrimary, UDim2.fromOffset(60, 14), UDim2.fromOffset(220, 16), Enum.Font.GothamBold)
 
-Label(AuthedView, "BASIC ACCESS", 9, COLOR_LIC, UDim2.fromOffset(60, 32), UDim2.fromOffset(220, 14), Enum.Font.GothamBold)
-Label(AuthedView, "TIME REMAINING", 8, T.TextMuted, UDim2.new(1, -180, 0, 16), UDim2.fromOffset(166, 10), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
+Label(AuthedView, "AUTHENTICATED", 9, COLOR_LIC, UDim2.fromOffset(60, 32), UDim2.fromOffset(220, 14), Enum.Font.GothamBold)
+Label(AuthedView, "TIME REMAINING", 8, T.TextMuted, UDim2.new(1, -180, 0, 16), UDim2.fromOffset(166, 10), Enum.Font.Gotham, Enum.TextXAlignment.Right)
 local AuthedTimerLabel = Label(AuthedView, "", 20, T.TextPrimary, UDim2.new(1, -180, 0, 28), UDim2.fromOffset(166, 28), Enum.Font.Code, Enum.TextXAlignment.Right)
 
 local function CleanKey(s)
@@ -520,24 +526,23 @@ end
 
 local dashFpsCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashFpsCard, COLOR_PERF, "F", 32, UDim2.fromOffset(12, 14))
-Label(dashFpsCard, "FPS", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+Label(dashFpsCard, "FPS", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.Gotham)
 local dashFpsValue = Label(dashFpsCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
 local dashPingCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashPingCard, COLOR_DASH, "N", 32, UDim2.fromOffset(12, 14))
-Label(dashPingCard, "LATENCY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+Label(dashPingCard, "LATENCY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.Gotham)
 local dashPingValue = Label(dashPingCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
 local dashMemCard = StatCard(dashStatsRow, { Size = UDim2.new(1/3, -7, 1, 0), Href = function() Window:_SelectTab(TabPerf) end })
 AddIconSquare(dashMemCard, COLOR_SET, "M", 32, UDim2.fromOffset(12, 14))
-Label(dashMemCard, "MEMORY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.GothamBold)
+Label(dashMemCard, "MEMORY", 8, T.TextMuted, UDim2.fromOffset(54, 14), UDim2.new(1, -66, 0, 10), Enum.Font.Gotham)
 local dashMemValue = Label(dashMemCard, "--", 11, T.TextPrimary, UDim2.fromOffset(54, 28), UDim2.new(1, -66, 0, 16), Enum.Font.GothamBold)
 
-local dashOverview = Panel(TabDashboard.Scroll, UDim2.new(1, 0, 0, 100))
+local dashOverview = Panel(TabDashboard.Scroll, UDim2.new(1, 0, 0, 78))
 Label(dashOverview, "Quick Overview", 12, T.TextSecondary, UDim2.fromOffset(14, 12), UDim2.new(1, -28, 0, 16), Enum.Font.GothamBold)
 
 local dashLibraryCountLbl = Label(dashOverview, "Loading library…", 10, COLOR_INFO, UDim2.fromOffset(14, 32), UDim2.new(1, -28, 0, 14), Enum.Font.GothamBold)
-Label(dashOverview, "Live performance stats are on the Performance tab.", 10, T.TextMuted, UDim2.fromOffset(14, 48), UDim2.new(1, -28, 0, 14))
 local dashInfoLink = Instance.new("TextButton")
 dashInfoLink.Size = UDim2.fromOffset(110, 16)
 dashInfoLink.Position = UDim2.fromOffset(14, 74)
@@ -569,7 +574,7 @@ local function PerfRow(color, letter)
     local row = Panel(TabPerf.Scroll, UDim2.new(1, 0, 0, 58))
     AddIconSquare(row, color, letter, 40, UDim2.fromOffset(12, 9))
     local valueLbl = Label(row, "--", 15, T.TextPrimary, UDim2.fromOffset(64, 12), UDim2.new(1,-76,0,20), Enum.Font.GothamBold)
-    local labelLbl = Label(row, "", 8, T.TextMuted, UDim2.fromOffset(64, 32), UDim2.new(1,-76,0,12), Enum.Font.GothamBold)
+    local labelLbl = Label(row, "", 8, T.TextMuted, UDim2.fromOffset(64, 32), UDim2.new(1,-76,0,12), Enum.Font.Gotham)
     return valueLbl, labelLbl
 end
 
@@ -604,6 +609,13 @@ end)
 
 
 TabInfo = Window:AddTab("Info")
+do
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.Padding = UDim.new(0, 6)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = TabInfo.Scroll
+end
 
 Label(TabInfo.Scroll, "Supported Games", 12, T.TextPrimary, UDim2.fromOffset(0,0), UDim2.new(1,0,0,16), Enum.Font.GothamBold)
 
@@ -645,22 +657,7 @@ local function AddInfoRow(place)
         end)
     end
 
-    local liveTag = Instance.new("TextLabel")
-    liveTag.Size = UDim2.fromOffset(38, 14)
-    liveTag.Position = UDim2.new(1, -80, 0, 17)
-    liveTag.BackgroundColor3 = COLOR_INFO
-    liveTag.BackgroundTransparency = 0.5
-    liveTag.BorderSizePixel = 0
-    liveTag.Font = Enum.Font.GothamBold
-    liveTag.TextSize = 9
-    liveTag.TextColor3 = COLOR_INFO
-    liveTag.Text = "LIVE"
-    liveTag.TextStrokeColor3 = TEXT_STROKE_COLOR
-    liveTag.TextStrokeTransparency = TEXT_STROKE_TRANSPARENCY
-    liveTag.Parent = row
-    do local c2 = Instance.new("UICorner"); c2.CornerRadius = UDim.new(0,4); c2.Parent = liveTag end
-
-    local copyLbl = Label(row, "Copy ID", 9, T.TextMuted, UDim2.new(1, -34, 0, 17), UDim2.fromOffset(30, 14), Enum.Font.GothamBold, Enum.TextXAlignment.Right)
+    local copyLbl = Label(row, "Copy ID", 9, T.TextMuted, UDim2.new(1, -68, 0, 17), UDim2.fromOffset(30, 14), Enum.Font.Gotham, Enum.TextXAlignment.Right)
 
     row.MouseEnter:Connect(function()
         TweenSvc:Create(row, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.28 }):Play()
