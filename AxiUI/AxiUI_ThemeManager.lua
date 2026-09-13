@@ -1,13 +1,4 @@
---[[
-    AxiUI — ThemeManager v1.0.0
-    Requires AxiUI_Framework to be loaded first.
 
-    Usage:
-        local ThemeManager = loadstring(game:HttpGet("...AxiUI_ThemeManager.lua"))()
-        ThemeManager:Apply("Ocean")
-        ThemeManager:ApplyToTab(tab)
-        ThemeManager:ApplyToGroupbox(gb)
-]]
 
 local _env  = (typeof(getgenv) == "function" and getgenv()) or _G
 local AxiUI = _env.AxiUI
@@ -17,16 +8,13 @@ local RunSvc  = game:GetService("RunService")
 local HttpSvc = game:GetService("HttpService")
 local T       = AxiUI.Theme
 
--- Keys that can be swapped by a theme (colors only — translucency stack stays fixed)
 local COLOR_KEYS = {
     "WindowBg", "Accent", "AccentStrong",
     "TextPrimary", "TextSecondary", "TextMuted",
 }
 local ALPHA_KEYS = { "WindowBgAlpha", "AccentAlpha" }
 
--- ═══════════════════════════════════════════════════════════════
---  BUILT-IN THEMES
--- ═══════════════════════════════════════════════════════════════
+-- Built-In Themes
 local Themes = {}
 
 Themes.Default = {
@@ -101,9 +89,6 @@ Themes.Sunset = {
     TextMuted     = Color3.fromRGB(100, 65,  55),
 }
 
--- ═══════════════════════════════════════════════════════════════
---  REPAINT  (scans descendant tree and swaps matched Color3s)
--- ═══════════════════════════════════════════════════════════════
 local function c2s(c)
     return math.floor(c.R*255+.5)..","..math.floor(c.G*255+.5)..","..math.floor(c.B*255+.5)
 end
@@ -141,11 +126,9 @@ local function repaintTree(root, oldMap, newTheme)
 end
 
 local function scanAndRepaint(oldMap, newTheme)
-    -- Repaint open windows
     for _, win in ipairs(AxiUI.Windows) do
         pcall(repaintTree, win.Gui, oldMap, newTheme)
     end
-    -- Repaint floating ScreenGuis (Notifs, Watermark, etc.)
     local function tryParent(p)
         if not p then return end
         for _, c in ipairs(p:GetChildren()) do
@@ -162,9 +145,7 @@ local function scanAndRepaint(oldMap, newTheme)
     end)
 end
 
--- ═══════════════════════════════════════════════════════════════
---  THEME MANAGER
--- ═══════════════════════════════════════════════════════════════
+-- Theme Manager
 local ThemeManager         = {}
 ThemeManager._themes       = Themes
 ThemeManager._current      = "Default"
@@ -190,14 +171,12 @@ function ThemeManager:Apply(name)
     local t = self._themes[name]
     if not t then return end
 
-    -- Build reverse map from current COLOR_KEYS in AxiUI.Theme
     local oldMap = {}
     for _, k in ipairs(COLOR_KEYS) do
         local v = T[k]
         if typeof(v) == "Color3" then oldMap[c2s(v)] = k end
     end
 
-    -- Mutate AxiUI.Theme in-place (T is a reference so Framework picks it up automatically)
     for _, k in ipairs(COLOR_KEYS) do
         if t[k] then T[k] = t[k] end
     end
@@ -205,7 +184,6 @@ function ThemeManager:Apply(name)
         if t[k] then T[k] = t[k] end
     end
 
-    -- Repaint existing GUI
     scanAndRepaint(oldMap, T)
 
     self._current = name
@@ -216,7 +194,6 @@ function ThemeManager:OnChanged(fn)
     table.insert(self._listeners, fn)
 end
 
--- ─── RAINBOW ACCENT ─────────────────────────────────────────────
 function ThemeManager:SetRainbow(enabled, speed)
     if self._rainbowConn then
         self._rainbowConn:Disconnect()
@@ -232,7 +209,6 @@ function ThemeManager:SetRainbow(enabled, speed)
     end)
 end
 
--- ─── CUSTOM THEME FILE I/O ──────────────────────────────────────
 function ThemeManager:SaveCustom(name)
     local data = {}
     for _, k in ipairs(COLOR_KEYS) do
@@ -271,7 +247,6 @@ function ThemeManager:LoadCustom(name)
     return true
 end
 
--- ─── UI BUILDERS ────────────────────────────────────────────────
 function ThemeManager:BuildUI(gb)
     gb:AddDropdown("TM_Theme", {
         Text    = "Theme",
@@ -303,6 +278,5 @@ function ThemeManager:ApplyToGroupbox(gb)
     if gb then self:BuildUI(gb) end
 end
 
--- ─── ATTACH ─────────────────────────────────────────────────────
 AxiUI.ThemeManager = ThemeManager
 return ThemeManager

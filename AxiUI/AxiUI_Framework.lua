@@ -1,21 +1,4 @@
---[[
-    AxiUI — Semi-Translucent Nested UI Library v1.0.0
-    A clean, professional Roblox executor UI framework.
 
-    Load order (each is optional beyond Framework):
-        local AxiUI  = loadstring(game:HttpGet("...AxiUI_Framework.lua"))()
-        -- optionally:
-        loadstring(game:HttpGet("...AxiUI_ThemeManager.lua"))()
-        loadstring(game:HttpGet("...AxiUI_InterfaceManager.lua"))()
-
-    Usage:
-        local Window = AxiUI:CreateWindow({ Title = "MyScript", Width = 420 })
-        local Tab    = Window:AddTab("Combat")
-        local Box    = Tab:AddGroupbox("Aimbot")
-        Box:AddToggle("SilentAim", { Text = "Silent Aim", Default = false,
-            Callback = function(v) print("Silent Aim:", v) end })
-        Box:AddSlider("FOV", { Text = "FOV", Default = 120, Min = 10, Max = 300 })
-]]
 
 local AxiUI       = {}
 AxiUI.__index     = AxiUI
@@ -24,21 +7,7 @@ AxiUI.Flags       = {}
 AxiUI.Connections = {}
 AxiUI.Version     = "1.0.0"
 
--- ═══════════════════════════════════════════════════════════════
---  DEFAULT THEME
---  Translucency stack (bottom → top):
---    Game world → Window (82% opaque) → Groupbox (3.5% tint)
---    → Element row (3% tint) → SubBox (2.5% tint)
---  One accent colour (warm brass). Everything else is neutral.
---
---  This used to be "soft lavender" -- a violet/indigo accent on a
---  blue-black window is precisely the "AI-generated UI" tell (traced to
---  Tailwind's indigo-500 default saturating design-tool training data),
---  not a deliberate choice. Replaced with a warm, desaturated brass/
---  neutral direction. Any consumer applying its own ThemeManager theme
---  (as UniversalKeyGate.lua does via ThemeManager:Apply) overrides these
---  anyway -- this is just the fork's own honest default.
--- ═══════════════════════════════════════════════════════════════
+-- Default Theme
 AxiUI.Theme = {
     WindowBg        = Color3.fromRGB(16,  15,  13),   WindowBgAlpha   = 0.90,
     GroupboxBg      = Color3.fromRGB(255, 255, 255),   GroupboxBgAlpha = 0.025,
@@ -57,18 +26,14 @@ AxiUI.Theme = {
     RadiusPill      = UDim.new(1, 0),
 }
 
--- ═══════════════════════════════════════════════════════════════
---  SERVICES
--- ═══════════════════════════════════════════════════════════════
+-- Services
 local TweenSvc  = game:GetService("TweenService")
 local UIS       = game:GetService("UserInputService")
 local HttpSvc   = game:GetService("HttpService")
 local Players   = game:GetService("Players")
 local RunSvc    = game:GetService("RunService")
 
--- ═══════════════════════════════════════════════════════════════
---  INTERNAL HELPERS
--- ═══════════════════════════════════════════════════════════════
+-- Internal Helpers
 local T = AxiUI.Theme  -- live reference; mutates with SetTheme
 
 local function Tween(obj, props, t, style)
@@ -118,10 +83,6 @@ local function AddPad(parent, all, t, b, l, r)
     return p
 end
 
--- Bumped up (+2 size, promoted to Bold) same as the consumer's own Label()
--- helper, so every framework-built label (tab names, groupbox headers,
--- toggle/slider/dropdown rows, notifications) reads bolder/larger too,
--- applied once here instead of at every call site.
 local function MakeLabel(parent, text, size, color, xAlign, font)
     local l = Instance.new("TextLabel")
     l.Text                  = text or ""
@@ -154,7 +115,6 @@ local function TrackConn(conn)
     return conn
 end
 
--- Safe gui parent (executor → CoreGui → PlayerGui)
 local function SafeParent(gui)
     local ok = pcall(function()
         if typeof(gethui) == "function" then
@@ -169,10 +129,7 @@ local function SafeParent(gui)
     end
 end
 
--- ═══════════════════════════════════════════════════════════════
---  POPUP LAYER  (dropdown lists, colour pickers)
---  One ScreenGui above everything; each popup manages itself.
--- ═══════════════════════════════════════════════════════════════
+-- Popup Layer
 local _popupSG
 local function GetPopupSG()
     if _popupSG and _popupSG.Parent then return _popupSG end
@@ -202,9 +159,7 @@ local function MakeOverlay(onClose)
     return ov
 end
 
--- ═══════════════════════════════════════════════════════════════
---  COLOUR PICKER POPUP
--- ═══════════════════════════════════════════════════════════════
+-- Colour Picker
 local function BuildColourPopup(anchor, initColor, onChange, onClose)
     local sg = GetPopupSG()
     local h, s, v = initColor:ToHSV()
@@ -231,7 +186,6 @@ local function BuildColourPopup(anchor, initColor, onChange, onClose)
     AddPad(popup, 8)
     AddList(popup, 6)
 
-    -- SV square
     local svBase = Instance.new("Frame")
     svBase.BackgroundColor3 = Color3.fromHSV(h,1,1)
     svBase.BorderSizePixel  = 0
@@ -287,7 +241,6 @@ local function BuildColourPopup(anchor, initColor, onChange, onClose)
     AddCorner(svKnob, UDim.new(1,0))
     AddStroke(svKnob, Color3.new(0,0,0), 0.25, 1)
 
-    -- Hue bar
     local hueBar = Instance.new("Frame")
     hueBar.BackgroundColor3 = Color3.new(1,1,1)
     hueBar.BorderSizePixel  = 0
@@ -319,7 +272,6 @@ local function BuildColourPopup(anchor, initColor, onChange, onClose)
     AddCorner(hueKnob, UDim.new(1,0))
     AddStroke(hueKnob, Color3.new(0,0,0), 0.25, 1)
 
-    -- Hex row
     local hexRow = Instance.new("Frame")
     hexRow.BackgroundTransparency = 1
     hexRow.BorderSizePixel        = 0
@@ -417,11 +369,7 @@ local function BuildColourPopup(anchor, initColor, onChange, onClose)
     return obj
 end
 
--- ═══════════════════════════════════════════════════════════════
---  NOTIFICATION SYSTEM
---  Floating bottom-right, outside the window so they show
---  even when the menu is hidden.
--- ═══════════════════════════════════════════════════════════════
+-- Notification System
 local _notifSG, _notifHolder
 local function EnsureNotifSG()
     if _notifSG and _notifSG.Parent then return end
@@ -458,7 +406,6 @@ function AxiUI:Notify(title, message, duration)
     AddCorner(card, UDim.new(0, 7))
     local stroke = AddStroke(card, T.Accent, 0.22)
 
-    -- accentBar uses NO Scale Y — avoids circular AutomaticSize dependency
     local accentBar = Instance.new("Frame")
     accentBar.BackgroundColor3 = T.AccentStrong
     accentBar.BorderSizePixel  = 0
@@ -467,7 +414,6 @@ function AxiUI:Notify(title, message, duration)
     accentBar.Parent           = card
     AddCorner(accentBar, UDim.new(1, 0))
 
-    -- body drives AutomaticSize; accentBar is an absolute overlay, not in layout flow
     local body = Instance.new("Frame")
     body.BackgroundTransparency = 1
     body.BorderSizePixel        = 0
@@ -487,7 +433,6 @@ function AxiUI:Notify(title, message, duration)
     msgL.AutomaticSize = Enum.AutomaticSize.Y
     msgL.TextWrapped  = true
 
-    -- Sync accentBar height to card height once card has been laid out
     card:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
         accentBar.Size = UDim2.fromOffset(3, math.max(0, card.AbsoluteSize.Y - 10))
     end)
@@ -504,9 +449,7 @@ function AxiUI:Notify(title, message, duration)
     end)
 end
 
--- ═══════════════════════════════════════════════════════════════
---  WINDOW
--- ═══════════════════════════════════════════════════════════════
+-- Window
 function AxiUI:CreateWindow(options)
     options    = options or {}
     local win  = setmetatable({}, { __index = self })
@@ -514,11 +457,6 @@ function AxiUI:CreateWindow(options)
     win.ActiveTab = nil
     win.Title     = options.Title or "AxiUI"
     win._closed   = false
-    -- HeaderHeight reserves space below the title bar for consumer-built
-    -- content (a greeting/avatar header, branding, whatever) -- the
-    -- framework positions the sidebar/content area around it correctly
-    -- instead of a consumer having to reposition everything by hand after
-    -- the fact (the previous, fragile way this was done).
     win.HeaderHeight = options.HeaderHeight or 0
     win.SidebarWidth = options.SidebarWidth or 160
 
@@ -562,20 +500,8 @@ function AxiUI:CreateWindow(options)
     return win
 end
 
--- Self-tracking soft drop shadow -- stacked, progressively larger/fainter
--- Frames (no external image asset dependency), wired directly to target's
--- own Position/Size/Visible/AnchorPoint via GetPropertyChangedSignal so it
--- can never visually desync from what it's shadowing. A prior version of
--- this (built outside the framework, in the consumer script) was a
--- one-time snapshot taken at creation -- it silently stopped tracking the
--- moment the target moved (dragged) or was hidden, leaving a shadow
--- floating in place forever. This is the actual fix, not a patch:
--- ownership and sync live in one place, permanently connected.
 function AxiUI:AddShadow(target, options)
     options = options or {}
-    -- Nudged stronger than the original pass (0.16/0.10/0.06/0.03) for
-    -- better window/UI definition against a variable backdrop -- still a
-    -- soft falloff, not a hard outline.
     local layers = options.Layers or {
         { pad = 5,  alpha = 0.22 },
         { pad = 11, alpha = 0.14 },
@@ -584,10 +510,6 @@ function AxiUI:AddShadow(target, options)
     }
     local baseRadius = options.CornerRadius or 12
 
-    -- Zero-size, zero-position wrapper at the shared parent's origin --
-    -- its children then use plain offset coordinates equivalent to
-    -- target.Position directly, without needing scale-relative math
-    -- against a degenerate (zero-size) container.
     local holder = Instance.new("Frame")
     holder.Name                   = "Shadow"
     holder.BackgroundTransparency = 1
@@ -641,7 +563,6 @@ function AxiUI:_BuildTitleBar()
     bar.BorderSizePixel        = 0
     bar.Parent                 = self.Frame
 
-    -- bottom divider
     local div = Instance.new("Frame")
     div.Size                   = UDim2.new(1,0,0,1)
     div.Position               = UDim2.new(0,0,1,-1)
@@ -650,25 +571,12 @@ function AxiUI:_BuildTitleBar()
     div.BorderSizePixel        = 0
     div.Parent                 = bar
 
-    -- (macOS-style traffic-light dots removed here on purpose -- not the
-    -- aesthetic this fork is for. Previously worked around at the consumer
-    -- level by hiding them after the fact; removed at the source instead
-    -- now that this is a dedicated fork, not a shared upstream library.)
 
-    -- Small uppercase left-aligned label, not a centered title + version --
-    -- matches the reference design's understated title bar.
     local title = MakeLabel(bar, self.Title:upper(), 9, T.TextMuted,
         Enum.TextXAlignment.Left, Enum.Font.GothamMedium)
     title.Size     = UDim2.new(1, -52, 1, 0)
     title.Position = UDim2.fromOffset(14, 0)
 
-    -- Close button -- removing the macOS traffic-light dots also removed
-    -- the only close affordance that used to live here, with nothing put
-    -- back in its place. Without this, a window that isn't set to
-    -- auto-close (e.g. reopened from the orb) has no way to be closed
-    -- again at all. Defaults to just hiding the frame; a consumer can set
-    -- Window.OnClose to run its own close animation/logic instead (e.g.
-    -- minimize-to-orb) without this file needing to know that exists.
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size                   = UDim2.fromOffset(24, 24)
     closeBtn.Position               = UDim2.new(1, -30, 0.5, -12)
@@ -694,8 +602,6 @@ function AxiUI:_BuildTitleBar()
 end
 
 function AxiUI:_BuildTabRow()
-    -- Left sidebar, not a horizontal top strip -- this fork exists
-    -- specifically for a dashboard-style layout, not the original chip-row.
     local topY = 34 + self.HeaderHeight
     local row = Instance.new("ScrollingFrame")
     row.Name                      = "TabRow"
@@ -714,8 +620,6 @@ function AxiUI:_BuildTabRow()
 
     self.TabRow = row
 
-    -- Right-edge divider, parented to the window frame (not the
-    -- ScrollingFrame) so it doesn't enter the vertical UIListLayout.
     local div = Instance.new("Frame")
     div.Name                   = "TabRowDivider"
     div.Size                   = UDim2.new(0, 1, 1, -topY)
@@ -785,9 +689,7 @@ function AxiUI:_BindToggleKey(key)
     end))
 end
 
--- ═══════════════════════════════════════════════════════════════
---  TAB
--- ═══════════════════════════════════════════════════════════════
+-- Tab
 local Tab = {}
 Tab.__index = Tab
 
@@ -798,9 +700,6 @@ function AxiUI:AddTab(name, options)
     tab.Window     = self
     tab.Groupboxes = {}
 
-    -- Tab button -- full-width row in the vertical sidebar, not an
-    -- auto-width horizontal chip. No icon badge -- plain text row, so
-    -- the full tab name always has room to sit unabbreviated.
     local btn = Instance.new("TextButton")
     btn.Text                   = ""
     btn.BackgroundColor3       = T.ElementBg
@@ -816,7 +715,6 @@ function AxiUI:AddTab(name, options)
     nameLbl.Size     = UDim2.new(1, -28, 1, 0)
     nameLbl.Position = UDim2.fromOffset(14, 0)
 
-    -- Scrollable content frame
     local scroll = Instance.new("ScrollingFrame")
     scroll.Size                     = UDim2.new(1,0,1,0)
     scroll.BackgroundTransparency   = 1
@@ -856,9 +754,6 @@ function AxiUI:AddTab(name, options)
     return tab
 end
 
--- Badge color/opacity is fixed per-tab (set once in AddTab) and never
--- toggled here -- only the button's own background and the label dim with
--- selection, matching the reference design.
 function AxiUI:_SelectTab(tab)
     for _, t in ipairs(self.Tabs) do
         Tween(t.Button,  { BackgroundTransparency = 1 }, 0.15)
@@ -867,19 +762,13 @@ function AxiUI:_SelectTab(tab)
     end
     Tween(tab.Button,  { BackgroundTransparency = 1 - 0.10 }, 0.15)
     Tween(tab.NameLbl, { TextColor3 = T.TextPrimary }, 0.15)
-    -- Content used to just snap visible with no transition at all -- a
-    -- small settle-into-place slide (not a fade, ScrollingFrame children
-    -- can't group-fade without a CanvasGroup) on every tab switch, same
-    -- Exponential easing as everything else in this file.
     tab.Scroll.Position = UDim2.fromOffset(0, 8)
     tab.Scroll.Visible = true
     Tween(tab.Scroll, { Position = UDim2.fromOffset(0, 0) }, 0.22, Enum.EasingStyle.Exponential)
     self.ActiveTab = tab
 end
 
--- ═══════════════════════════════════════════════════════════════
---  GROUPBOX
--- ═══════════════════════════════════════════════════════════════
+-- Groupbox
 local Groupbox = {}
 Groupbox.__index = Groupbox
 
@@ -898,7 +787,6 @@ local function BuildGroupbox(parent, name, bgColor, bgAlpha, radius, strokeAlpha
     AddCorner(container, radius)
     AddStroke(container, T.Border, strokeAlpha or T.BorderAlpha)
 
-    -- Header
     local header = Instance.new("TextButton")
     header.Name                   = "Header"
     header.Size                   = UDim2.new(1,0,0,28)
@@ -910,7 +798,6 @@ local function BuildGroupbox(parent, name, bgColor, bgAlpha, radius, strokeAlpha
     header.Parent                 = container
     AddCorner(header, radius)  -- top corners only illusion via same radius
 
-    -- square-off lower half of header so body butts up cleanly
     local hdrFill = Instance.new("Frame")
     hdrFill.BackgroundColor3       = Color3.fromRGB(255,255,255)
     hdrFill.BackgroundTransparency = 1
@@ -936,7 +823,6 @@ local function BuildGroupbox(parent, name, bgColor, bgAlpha, radius, strokeAlpha
     hdrDiv.BorderSizePixel        = 0
     hdrDiv.Parent                 = header
 
-    -- Body
     local body = Instance.new("Frame")
     body.Name                   = "Body"
     body.Size                   = UDim2.new(1,0,0,0)
@@ -969,17 +855,14 @@ function Tab:AddGroupbox(name, options)
     return gb
 end
 
--- ═══════════════════════════════════════════════════════════════
---  ELEMENTS
--- ═══════════════════════════════════════════════════════════════
+-- Elements
 
--- ── TOGGLE ─────────────────────────────────────────────────────
+-- Elements
 function Groupbox:AddToggle(key, opts)
     opts = opts or {}
     AxiUI.Flags[key] = opts.Default == true
 
     local row = MakeElementRow(self.Body)
-    -- Label (left)
     local lFrame = Instance.new("Frame")
     lFrame.BackgroundTransparency = 1
     lFrame.BorderSizePixel        = 0
@@ -995,7 +878,6 @@ function Groupbox:AddToggle(key, opts)
         sub.Size = UDim2.new(1,0,0,11)
     end
 
-    -- Pill (right)
     local pill = Instance.new("Frame")
     pill.Size             = UDim2.fromOffset(32,17)
     pill.AnchorPoint      = Vector2.new(1,0.5)
@@ -1032,7 +914,6 @@ function Groupbox:AddToggle(key, opts)
     end
     SetToggle(opts.Default == true, true)
 
-    -- Transparent click layer on top
     local clickBtn = Instance.new("TextButton")
     clickBtn.Size = UDim2.new(1,0,1,0); clickBtn.BackgroundTransparency = 1
     clickBtn.Text = ""; clickBtn.BorderSizePixel = 0; clickBtn.Parent = row
@@ -1045,7 +926,6 @@ function Groupbox:AddToggle(key, opts)
     return obj
 end
 
--- ── BUTTON ──────────────────────────────────────────────────────
 function Groupbox:AddButton(opts)
     opts = type(opts) == "string" and { Text = opts } or (opts or {})
     local row = MakeElementRow(self.Body)
@@ -1078,7 +958,6 @@ function Groupbox:AddButton(opts)
     return { Button = btn, Row = row }
 end
 
--- ── SLIDER ──────────────────────────────────────────────────────
 function Groupbox:AddSlider(key, opts)
     opts = opts or {}
     local min, max = opts.Min or 0, opts.Max or 100
@@ -1098,7 +977,6 @@ function Groupbox:AddSlider(key, opts)
     valLbl.Size     = UDim2.fromOffset(30,30)
     valLbl.Position = UDim2.new(1,-38,0,0)
 
-    -- Transparent hit zone — full row height makes it easy to click anywhere near the bar
     local track = Instance.new("Frame")
     track.Size                  = UDim2.fromOffset(88, 28)
     track.AnchorPoint           = Vector2.new(1, 0.5)
@@ -1107,7 +985,6 @@ function Groupbox:AddSlider(key, opts)
     track.BorderSizePixel       = 0
     track.Parent                = row
 
-    -- Visual bar (3 px tall, centred inside the hit zone)
     local trackBar = Instance.new("Frame")
     trackBar.Size             = UDim2.new(1, 0, 0, 3)
     trackBar.AnchorPoint      = Vector2.new(0, 0.5)
@@ -1126,7 +1003,6 @@ function Groupbox:AddSlider(key, opts)
     fill.Parent                 = trackBar
     AddCorner(fill, UDim.new(1, 0))
 
-    -- Thumb sits in the hit zone so it's centred on the bar visually
     local thumb = Instance.new("Frame")
     thumb.Size             = UDim2.fromOffset(11, 11)
     thumb.AnchorPoint      = Vector2.new(0.5, 0.5)
@@ -1173,7 +1049,6 @@ function Groupbox:AddSlider(key, opts)
     return obj
 end
 
--- ── DROPDOWN ────────────────────────────────────────────────────
 function Groupbox:AddDropdown(key, opts)
     opts = opts or {}
     local items   = opts.Items or {}
@@ -1283,7 +1158,6 @@ function Groupbox:AddDropdown(key, opts)
     return obj
 end
 
--- ── INPUT ───────────────────────────────────────────────────────
 function Groupbox:AddInput(key, opts)
     opts = opts or {}
     AxiUI.Flags[key] = opts.Default or ""
@@ -1345,7 +1219,6 @@ function Groupbox:AddInput(key, opts)
     return obj
 end
 
--- ── KEYBIND ─────────────────────────────────────────────────────
 function Groupbox:AddKeybind(key, opts)
     opts = opts or {}
     local currentKey = opts.Default or Enum.KeyCode.Unknown
@@ -1405,7 +1278,7 @@ function Groupbox:AddKeybind(key, opts)
     return { Get = function() return AxiUI.Flags[key] end }
 end
 
--- ── COLOUR PICKER ───────────────────────────────────────────────
+-- Colour Picker
 function Groupbox:AddColorPicker(key, opts)
     opts = opts or {}
     local initColor = opts.Default or Color3.fromRGB(255,255,255)
@@ -1453,7 +1326,6 @@ function Groupbox:AddColorPicker(key, opts)
     return obj
 end
 
--- ── LABEL ───────────────────────────────────────────────────────
 function Groupbox:AddLabel(text, opts)
     opts = opts or {}
     local row = Instance.new("Frame")
@@ -1473,7 +1345,6 @@ function Groupbox:AddLabel(text, opts)
     return lbl
 end
 
--- ── DIVIDER ─────────────────────────────────────────────────────
 function Groupbox:AddDivider()
     local div = Instance.new("Frame")
     div.BackgroundColor3      = T.Border
@@ -1484,30 +1355,20 @@ function Groupbox:AddDivider()
     div.Parent                 = self.Body
 end
 
--- ── SUBBOX ──────────────────────────────────────────────────────
 function Groupbox:AddSubBox(name)
     return BuildGroupbox(self.Body, name,
         T.SubBoxBg, T.SubBoxBgAlpha, T.RadiusSubBox, 0.055)
 end
 
--- ═══════════════════════════════════════════════════════════════
---  THEME  (partial override — takes effect immediately for future
---  elements; call before CreateWindow for clean results)
--- ═══════════════════════════════════════════════════════════════
 function AxiUI:SetTheme(overrides)
     for k, v in pairs(overrides) do
         AxiUI.Theme[k] = v
     end
-    -- T is a reference to AxiUI.Theme, so it updates automatically.
 end
 
--- ═══════════════════════════════════════════════════════════════
---  CONFIG  SAVE / LOAD
--- ═══════════════════════════════════════════════════════════════
 function AxiUI:SaveConfig(name)
     local data = {}
     for k, v in pairs(self.Flags) do
-        -- skip _obj entries and non-primitive types
         if not k:find("_obj$") then
             local t = type(v)
             if t == "boolean" or t == "number" or t == "string" then
@@ -1549,9 +1410,7 @@ function AxiUI:LoadConfig(name)
     return true
 end
 
--- ═══════════════════════════════════════════════════════════════
---  UNLOAD
--- ═══════════════════════════════════════════════════════════════
+-- Unload
 function AxiUI:Unload()
     for _, conn in ipairs(self.Connections) do
         pcall(function() conn:Disconnect() end)
@@ -1567,7 +1426,6 @@ function AxiUI:Unload()
     if self.OnUnload then pcall(self.OnUnload) end
 end
 
--- Publish to global env so ThemeManager / InterfaceManager can find this instance
 pcall(function()
     local _genv = typeof(getgenv) == "function" and getgenv() or _G
     _genv.AxiUI = AxiUI

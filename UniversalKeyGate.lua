@@ -1,5 +1,6 @@
 local ok, err = pcall(function()
 
+-- Fetch Services
 local Players     = game:GetService("Players")
 local TweenSvc     = game:GetService("TweenService")
 local UIS          = game:GetService("UserInputService")
@@ -11,6 +12,7 @@ local LocalPlayer = Players.LocalPlayer
 local setclipboard = setclipboard or function(text) print("[Clipboard]", text) end
 
 
+-- Setup Blur Effect
 local BlurEffect = Instance.new("DepthOfFieldEffect")
 BlurEffect.Name          = "UniversalKeyGate_Blur"
 BlurEffect.FocusDistance = 2
@@ -31,6 +33,7 @@ local function SetBlur(on)
     end
 end
 
+-- Load KeyAuth Module
 local KEYAUTH_MODULE_URL = "https://auth.833s.net/keyauth.lua"
 
 local KeyAuth = loadstring(game:HttpGet(KEYAUTH_MODULE_URL))()
@@ -48,6 +51,7 @@ end
 local PlaceId = game.PlaceId
 local CACHE_FILE = "universalkeygate_place_" .. tostring(PlaceId) .. ".json"
 
+-- Define Payload Runner
 local function RunPayload(source)
     local runOk, runErr = pcall(function()
         loadstring(source)()
@@ -57,12 +61,14 @@ local function RunPayload(source)
     end
 end
 
+-- Load UI Framework
 local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/axiui-keygate/9f25c3ef9b4baa038ec4853df4595ea6b3026af9/AxiUI/"
 
 local AxiUI = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_Framework.lua"))()
 local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.lua"))()
 
 
+-- Apply UI Theme
 AxiUI:SetTheme({
     GroupboxBg      = Color3.fromRGB(27, 26, 24),      GroupboxBgAlpha = 0.60,
     ElementBg       = Color3.fromRGB(27, 26, 24),      ElementBgAlpha  = 0.60,
@@ -83,6 +89,7 @@ ThemeManager:Apply("Glass")
 local T = AxiUI.Theme
 
 
+-- Setup UI Constants
 local TEXT_STROKE_TRANSPARENCY = 0.55
 local TEXT_STROKE_COLOR = Color3.new(0, 0, 0)
 
@@ -112,6 +119,7 @@ local HEADER_H   = 50
 local WIDTH      = CONTENT_W + SIDEBAR_W
 local HEIGHT     = 550
 
+-- Create Main Window
 local Window = AxiUI:CreateWindow({
     Title        = "Universal Key Gate Dashboard",
     Width        = WIDTH,
@@ -145,6 +153,7 @@ do
     sheen.Parent = Window.Frame
 end
 
+-- Greeting Logic
 local function GetGreeting()
     local hour = DateTime.now():ToLocalTime().Hour
     local part
@@ -156,6 +165,7 @@ local function GetGreeting()
     return part .. ", " .. LocalPlayer.DisplayName .. "!"
 end
 
+-- Setup Header UI
 local HeaderRow = Instance.new("Frame")
 HeaderRow.Name                   = "Header"
 HeaderRow.Size                   = UDim2.new(1, 0, 0, HEADER_H)
@@ -172,6 +182,7 @@ headerDiv.BackgroundTransparency = 1 - T.BorderAlpha
 headerDiv.BorderSizePixel        = 0
 headerDiv.Parent                 = HeaderRow
 
+-- Setup Avatar Image
 local AVATAR_SIZE = 36
 local AvatarImg = Instance.new("ImageLabel")
 AvatarImg.Name                  = "Avatar"
@@ -242,6 +253,7 @@ task.spawn(function()
     end
 end)
 
+-- Helper UI Functions
 local function Panel(parent, size, position)
     local p = Instance.new("Frame")
     p.Size                   = size
@@ -326,6 +338,7 @@ local function Label(parent, text, size, color, pos, sz, font, align)
     return l
 end
 
+-- Setup Toast Notifications
 local Toast = Instance.new("TextLabel")
 Toast.Size                   = UDim2.fromOffset(180, 34)
 Toast.AnchorPoint             = Vector2.new(0.5, 1)
@@ -363,6 +376,7 @@ end
 local TabDashboard, TabSettings, TabPerf, TabInfo
 
 
+-- Dashboard Tab Setup
 TabDashboard = Window:AddTab("Dashboard")
 do
     local layout = Instance.new("UIListLayout")
@@ -372,6 +386,7 @@ do
     layout.Parent = TabDashboard.Scroll
 end
 
+-- License Entry UI
 local licenseWrap = Instance.new("Frame")
 licenseWrap.Size = UDim2.new(1, 0, 0, 76)
 licenseWrap.BackgroundTransparency = 1
@@ -441,6 +456,7 @@ ValidateBtnFrame.MouseLeave:Connect(function()
     TweenSvc:Create(ValidateBtnFrame, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), { BackgroundTransparency = 0.12 }):Play()
 end)
 
+-- Authenticated UI
 local AuthedView = Panel(licenseWrap, UDim2.new(1, 0, 1, 0))
 AuthedView.Visible = false
 do
@@ -485,6 +501,7 @@ local function FormatRemaining(msRemaining)
 end
 
 
+-- Timer Logic
 local function StartTimer(expiresAt)
     StopTimer()
     if expiresAt == nil then
@@ -510,6 +527,7 @@ local function ShowAuthenticatedState(resolvedScript, expiresAt)
 end
 
 
+-- Dashboard Stats Setup
 local dashStatsRow = Instance.new("Frame")
 dashStatsRow.Size = UDim2.new(1, 0, 0, 74)
 dashStatsRow.BackgroundTransparency = 1
@@ -564,10 +582,12 @@ dashInfoLink.MouseLeave:Connect(function()
 end)
 
 
+-- Settings Tab Setup
 TabSettings = Window:AddTab("Settings")
 ThemeManager:ApplyToTab(TabSettings)
 
 
+-- Performance Tab Setup
 TabPerf = Window:AddTab("Performance")
 
 local function PerfRow(color, letter)
@@ -608,6 +628,7 @@ task.spawn(function()
 end)
 
 
+-- Info Tab Setup
 TabInfo = Window:AddTab("Info")
 do
     local layout = Instance.new("UIListLayout")
@@ -705,6 +726,7 @@ task.spawn(RefreshInfo)
 local ReopenOrb = nil
 local ReopenWindow
 
+-- Floating Reopen Orb
 local function BuildReopenOrb()
     if ReopenOrb then return ReopenOrb end
 
@@ -862,6 +884,7 @@ local function Shake(frame)
 end
 
 local validating = false
+-- Key Validation Logic
 local function SubmitKey()
     if validating then return end
 
@@ -894,6 +917,7 @@ end
 
 ValidateBtnFrame.MouseButton1Click:Connect(SubmitKey)
 
+-- Silent Load Logic
 local function TrySilentLoad()
     local cachedKey, cachedUserId = KeyAuth.LoadCachedKey(CACHE_FILE)
     if not cachedKey or cachedUserId ~= tostring(LocalPlayer.UserId) then
