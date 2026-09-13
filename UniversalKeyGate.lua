@@ -41,7 +41,7 @@ if type(KeyAuth) ~= "table"
     or type(KeyAuth.SaveCachedKey) ~= "function"
     or type(KeyAuth.ListPlaces) ~= "function"
 then
-    warn("[UniversalKeyGate] Failed to load KeyAuth module from " .. KEYAUTH_MODULE_URL .. " -- aborting")
+    warn("failed to load keyauth -- " .. KEYAUTH_MODULE_URL)
     return
 end
 
@@ -53,7 +53,7 @@ local function RunPayload(source)
         loadstring(source)()
     end)
     if not runOk then
-        warn("[UniversalKeyGate] Script exec failed: " .. tostring(runErr))
+        warn(runErr)
     end
 end
 
@@ -456,7 +456,7 @@ local AuthedTimerLabel = Label(AuthedView, "", 20, T.TextPrimary, UDim2.new(1, -
 
 local function CleanKey(s)
     s = tostring(s or "")
-    s = s:gsub("\226\128\139", "")
+    s = s:gsub("\226\128\139", "") -- U+200B
     s = s:gsub("%s+", "")
     return s
 end
@@ -932,5 +932,5 @@ end
 end)
 
 if not ok then
-    warn("[UniversalKeyGate] Failed to build UI: " .. tostring(err))
+    warn(err)
 end
