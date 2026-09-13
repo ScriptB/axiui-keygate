@@ -31,7 +31,7 @@ local function SetBlur(on)
     end
 end
 
-local KEYAUTH_MODULE_URL = "https://finite-log-proxy.asuneteric.workers.dev/keyauth.lua"
+local KEYAUTH_MODULE_URL = "https://auth.833s.net/keyauth.lua"
 
 local KeyAuth = loadstring(game:HttpGet(KEYAUTH_MODULE_URL))()
 if type(KeyAuth) ~= "table"
@@ -57,7 +57,7 @@ local function RunPayload(source)
     end
 end
 
-local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/axiui-keygate/main/AxiUI/"
+local AXIUI_BASE = "https://raw.githubusercontent.com/ScriptB/axiui-keygate/f86a355efa04b6e2a629f5ce6b024cd650620feb/AxiUI/"
 
 local AxiUI = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_Framework.lua"))()
 local ThemeManager = loadstring(game:HttpGet(AXIUI_BASE .. "AxiUI_ThemeManager.lua"))()
