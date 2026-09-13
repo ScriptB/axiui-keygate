@@ -40,13 +40,13 @@ AxiUI.Version     = "1.0.0"
 --  anyway -- this is just the fork's own honest default.
 -- ═══════════════════════════════════════════════════════════════
 AxiUI.Theme = {
-    WindowBg        = Color3.fromRGB(16,  15,  13),   WindowBgAlpha   = 0.82,
-    GroupboxBg      = Color3.fromRGB(255, 255, 255),   GroupboxBgAlpha = 0.035,
-    ElementBg       = Color3.fromRGB(255, 255, 255),   ElementBgAlpha  = 0.03,
-    SubBoxBg        = Color3.fromRGB(255, 255, 255),   SubBoxBgAlpha   = 0.025,
+    WindowBg        = Color3.fromRGB(16,  15,  13),   WindowBgAlpha   = 0.90,
+    GroupboxBg      = Color3.fromRGB(255, 255, 255),   GroupboxBgAlpha = 0.025,
+    ElementBg       = Color3.fromRGB(255, 255, 255),   ElementBgAlpha  = 0.02,
+    SubBoxBg        = Color3.fromRGB(255, 255, 255),   SubBoxBgAlpha   = 0.02,
     Accent          = Color3.fromRGB(190, 160, 110),   AccentAlpha     = 0.35,
     AccentStrong    = Color3.fromRGB(225, 205, 165),
-    Border          = Color3.fromRGB(255, 255, 255),   BorderAlpha     = 0.08,
+    Border          = Color3.fromRGB(255, 255, 255),   BorderAlpha     = 0.12,
     TextPrimary     = Color3.fromRGB(226, 222, 214),
     TextSecondary   = Color3.fromRGB(150, 145, 136),
     TextMuted       = Color3.fromRGB(90,  86,  78),
@@ -637,7 +637,7 @@ function AxiUI:_BuildTitleBar()
     bar.Name                   = "TitleBar"
     bar.Size                   = UDim2.new(1,0,0,34)
     bar.BackgroundColor3       = Color3.fromRGB(255,255,255)
-    bar.BackgroundTransparency = 0.97
+    bar.BackgroundTransparency = 1
     bar.BorderSizePixel        = 0
     bar.Parent                 = self.Frame
 
@@ -903,7 +903,7 @@ local function BuildGroupbox(parent, name, bgColor, bgAlpha, radius, strokeAlpha
     header.Name                   = "Header"
     header.Size                   = UDim2.new(1,0,0,28)
     header.BackgroundColor3       = Color3.fromRGB(255,255,255)
-    header.BackgroundTransparency = 0.98
+    header.BackgroundTransparency = 1
     header.Text                   = ""
     header.AutoButtonColor        = false
     header.BorderSizePixel        = 0
@@ -913,7 +913,7 @@ local function BuildGroupbox(parent, name, bgColor, bgAlpha, radius, strokeAlpha
     -- square-off lower half of header so body butts up cleanly
     local hdrFill = Instance.new("Frame")
     hdrFill.BackgroundColor3       = Color3.fromRGB(255,255,255)
-    hdrFill.BackgroundTransparency = 0.98
+    hdrFill.BackgroundTransparency = 1
     hdrFill.BorderSizePixel        = 0
     hdrFill.Size                   = UDim2.new(1,0,0.5,0)
     hdrFill.Position               = UDim2.new(0,0,0.5,0)
